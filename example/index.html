@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>elm-view-name-injector demo</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- load the TAGGED bundle produced by `npm run build:example` -->
+    <script src="out.tagged.js"></script>
+    <script>
+      Elm.Main.init({ node: document.getElementById('root') });
+    </script>
+  </body>
+</html>

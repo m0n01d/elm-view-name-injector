@@ -1,0 +1,22 @@
+{
+  "name": "elm-view-name-injector",
+  "version": "0.1.0",
+  "description": "Post-compile transformer that tags each Elm view function's rendered element with an elm-view-name HTML attribute — DevTools-style component names for Elm.",
+  "keywords": ["elm", "elm-watch", "devtools", "codemod", "babel"],
+  "license": "MIT",
+  "main": "src/inject-view-names.js",
+  "bin": {
+    "inject-view-names": "bin/cli.js"
+  },
+  "scripts": {
+    "test": "node test/run.js",
+    "build:example": "node scripts/build-example.js",
+    "transform:example": "node bin/cli.js example/out.js -o example/out.tagged.js --stats"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.24.0",
+    "@babel/types": "^7.24.0",
+    "recast": "^0.23.6"
+  }
+}
