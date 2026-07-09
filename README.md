@@ -95,6 +95,20 @@ elm make src/Main.elm --output=app.js          # or --debug
 node bin/cli.js app.js -i
 ```
 
+### Quick try on an elm-watch project (one-shot)
+
+Build a target un-optimized and tag its output in place (the output is
+gitignored, so this doesn't touch your working diff):
+
+```sh
+npm run try:ui -- --ui /path/to/ui --target Client
+# then serve WITHOUT hot (so it isn't overwritten) and inspect [elm-view-name]
+```
+
+For **live** tagging on every hot reload, see
+[integrations/elm-watch-postprocess.md](integrations/elm-watch-postprocess.md)
+(a small, env-gated, production-safe hook into the existing postprocess).
+
 ### With elm-watch (DEBUG / hot mode)
 
 Add a postprocess step in `elm-watch.json` — it pipes the compiled JS on stdin:

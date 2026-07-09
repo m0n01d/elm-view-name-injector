@@ -11,7 +11,8 @@
   "scripts": {
     "test": "node test/run.js",
     "build:example": "node scripts/build-example.js",
-    "transform:example": "node bin/cli.js example/out.js -o example/out.tagged.js --stats"
+    "transform:example": "node bin/cli.js example/out.js -o example/out.tagged.js --stats",
+    "try:ui": "node scripts/try-on-elm-watch.mjs"
   },
   "dependencies": {
     "@babel/parser": "^7.24.0",
