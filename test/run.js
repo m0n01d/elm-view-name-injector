@@ -149,6 +149,12 @@ const wrapped = transform(fixture, { wrap: true });
 check('wraps the opaque forms (text/map/lazy)', () =>
   assert.ok(wrapped.stats.wrapped >= 3, `wrapped=${wrapped.stats.wrapped}`)
 );
+check('does NOT wrap a partially-applied lazy (regression: fun is not a function)', () =>
+  assert.ok(
+    !wrapped.stats.tagged.includes('Main.lazyPartial (wrapped)'),
+    'partial lazy2 was wrapped — would turn a function into a div and break callers'
+  )
+);
 check('wrapped output still valid JS', () =>
   babelParser.parse(wrapped.code, { sourceType: 'script' })
 );

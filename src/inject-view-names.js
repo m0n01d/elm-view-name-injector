@@ -56,16 +56,19 @@ const A2_ELEMENT_RE = /^\$elm\$html\$Html\$[a-z][A-Za-z0-9_]*$/;
 const A2_BLOCKLIST = new Set(['$elm$html$Html$map', '$elm$html$Html$node']);
 // arity-3 element constructors (custom + keyed nodes): attrs is the 3rd arg.
 const A3_ELEMENTS = new Set(['$elm$html$Html$node', '$elm$html$Html$Keyed$node']);
-// stdlib-opaque Html values we can safely `--wrap` (definitely Html, no attr slot).
-const OPAQUE_HTML = new Set([
-  '$elm$html$Html$text',
-  '$elm$html$Html$map',
-  '$elm$html$Html$Lazy$lazy',
-  '$elm$html$Html$Lazy$lazy2',
-  '$elm$html$Html$Lazy$lazy3',
-  '$elm$html$Html$Lazy$lazy4',
-  '$elm$html$Html$Lazy$lazy5',
-]);
+// Opaque Html producers we can `--wrap`, mapped to the argument count of a FULL
+// application. `text` is arity 1 (direct call); the rest go through AN(fn, …args).
+// A call with FEWER args is a PARTIAL application that returns a *function*, not
+// Html — wrapping that turns a function into a div and breaks its callers (e.g.
+// `Icon.element = A2(lazy4, …)`), so we require an exact arity match.
+const OPAQUE_ARITY = {
+  '$elm$html$Html$map': 2,
+  '$elm$html$Html$Lazy$lazy': 2,
+  '$elm$html$Html$Lazy$lazy2': 3,
+  '$elm$html$Html$Lazy$lazy3': 4,
+  '$elm$html$Html$Lazy$lazy4': 5,
+  '$elm$html$Html$Lazy$lazy5': 6,
+};
 
 /** `$author$project$Ui$Button$primary` -> `Ui.Button.primary` */
 function demangle(name, prefix) {
@@ -107,13 +110,13 @@ function classifyElement(node) {
 
 /** stdlib-opaque Html value (text/map/lazy) usable with --wrap? */
 function isOpaqueHtml(node) {
-  if (!t.isCallExpression(node)) return false;
-  if (t.isIdentifier(node.callee) && OPAQUE_HTML.has(node.callee.name)) return true; // text(x)
-  if (t.isIdentifier(node.callee) && /^A\d+$/.test(node.callee.name)) {
-    const first = node.arguments[0];
-    if (t.isIdentifier(first) && OPAQUE_HTML.has(first.name)) return true;
-  }
-  return false;
+  if (!t.isCallExpression(node) || !t.isIdentifier(node.callee)) return false;
+  if (node.callee.name === '$elm$html$Html$text') return true; // arity 1, direct call
+  const m = /^A(\d+)$/.exec(node.callee.name);
+  if (!m) return false;
+  const first = node.arguments[0];
+  // only a FULL application (N args === fn arity) yields Html; partials are functions
+  return t.isIdentifier(first) && OPAQUE_ARITY[first.name] === Number(m[1]);
 }
 
 /** True if the attrs arg already begins with our injected attribute (idempotency). */

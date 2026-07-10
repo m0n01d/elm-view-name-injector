@@ -231,6 +231,15 @@ viewPointFree =
     viewA1
 
 
+{-| REGRESSION: partially-applied Lazy.lazy2 -> `A2(lazy2, fn, ())`. This is a
+    FUNCTION (Model -> Html), not Html — like `Icon.element = A2(lazy4, …)` in the
+    real app. --wrap must NOT touch it; wrapping made it a div and broke callers
+    ("fun is not a function"). -}
+lazyPartial : Model -> Html Msg
+lazyPartial =
+    Lazy.lazy2 (\() m -> viewA1 m) ()
+
+
 {-| returns List (Html Msg), not a single element -> skip. -}
 viewItems : Model -> List (Html Msg)
 viewItems model =
@@ -270,6 +279,7 @@ view model =
         , viewManyAttrsEvents model
         , viewAttrsAppended [ class "extra" ]
         , viewPointFree model
+        , lazyPartial model
         , div [] (viewItems model)
         , Home.view model
         , SettingsForm.view model

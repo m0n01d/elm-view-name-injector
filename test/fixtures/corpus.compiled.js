@@ -5229,6 +5229,30 @@ var $author$project$Main$customTag = A2(
 		]));
 var $elm$html$Html$div = _VirtualDom_node('div');
 var $elm$html$Html$Attributes$id = $elm$html$Html$Attributes$stringProperty('id');
+var $elm$virtual_dom$VirtualDom$lazy2 = _VirtualDom_lazy2;
+var $elm$html$Html$Lazy$lazy2 = $elm$virtual_dom$VirtualDom$lazy2;
+var $elm$virtual_dom$VirtualDom$text = _VirtualDom_text;
+var $elm$html$Html$text = $elm$virtual_dom$VirtualDom$text;
+var $author$project$Main$viewA1 = function (model) {
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				$elm$html$Html$Attributes$class('a1')
+			]),
+		_List_fromArray(
+			[
+				$elm$html$Html$text(
+				$elm$core$String$fromInt(model.count))
+			]));
+};
+var $author$project$Main$lazyPartial = A2(
+	$elm$html$Html$Lazy$lazy2,
+	F2(
+		function (_v0, m) {
+			return $author$project$Main$viewA1(m);
+		}),
+	_Utils_Tuple0);
 var $elm$virtual_dom$VirtualDom$Normal = function (a) {
 	return {$: 'Normal', a: a};
 };
@@ -5246,8 +5270,6 @@ var $elm$html$Html$Events$onClick = function (msg) {
 		'click',
 		$elm$json$Json$Decode$succeed(msg));
 };
-var $elm$virtual_dom$VirtualDom$text = _VirtualDom_text;
-var $elm$html$Html$text = $elm$virtual_dom$VirtualDom$text;
 var $elm$html$Html$h1 = _VirtualDom_node('h1');
 var $author$project$Ui$Layout$card = function (content) {
 	return A2(
@@ -5458,19 +5480,6 @@ var $author$project$Main$viewA0 = A2(
 		[
 			$elm$html$Html$text('no args')
 		]));
-var $author$project$Main$viewA1 = function (model) {
-	return A2(
-		$elm$html$Html$div,
-		_List_fromArray(
-			[
-				$elm$html$Html$Attributes$class('a1')
-			]),
-		_List_fromArray(
-			[
-				$elm$html$Html$text(
-				$elm$core$String$fromInt(model.count))
-			]));
-};
 var $author$project$Main$viewA2 = F2(
 	function (count, label) {
 		return A2(
@@ -5812,6 +5821,7 @@ var $author$project$Main$view = function (model) {
 						$elm$html$Html$Attributes$class('extra')
 					])),
 				$author$project$Main$viewPointFree(model),
+				$author$project$Main$lazyPartial(model),
 				A2(
 				$elm$html$Html$div,
 				_List_Nil,
