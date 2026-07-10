@@ -85,9 +85,11 @@ node bin/cli.js out.js -i --manifest /path/to/elm-project
 node bin/manifest.js /path/to/ui -o /path/to/ui/public/elm-view-manifest.json
 ```
 
-Editor scheme defaults to `vscode://file/{file}:{line}`. Override it before the
-bundle loads via `window.__elmViewEditor` (a `"…{file}…{line}…"` template or a
-`(file, line) => url` function), e.g. for Cursor, JetBrains, etc.
+Pick your editor from the footer's **"Open in…"** dropdown — VS Code (+ Insiders),
+Cursor, Windsurf, Zed, JetBrains, TextMate, Sublime — and it's remembered
+(localStorage) across reloads. Advanced override: set `window.__elmViewEditor`
+before the bundle loads to a `"…{file}…{line}…"` template or a
+`(file, line) => url` function (takes precedence over the dropdown).
 
 ---
 

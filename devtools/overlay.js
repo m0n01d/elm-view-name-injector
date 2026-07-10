@@ -73,6 +73,7 @@
     '.foot{display:none;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid #263241;background:#0c141d}' +
     '.foot.on{display:flex}' +
     '.foot .loc{flex:1;opacity:.7;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}' +
+    '.foot .ide{background:#1c2836;color:#d7e0ea;border:1px solid #2d3c4d;border-radius:5px;padding:2px 4px;font-size:11px;max-width:120px}' +
     '.foot .open[disabled]{opacity:.4;cursor:default}' +
     '</style>' +
     '<div class="dt collapsed">' +
@@ -87,7 +88,7 @@
     '    </div>' +
     '    <input class="search" placeholder="filter by name…" />' +
     '    <div class="tree"></div>' +
-    '    <div class="foot"><span class="loc"></span><button class="btn open" title="Open in editor (or double-click a row)">&lt;&gt; source</button></div>' +
+    '    <div class="foot"><span class="loc"></span><select class="ide" title="Open in…"></select><button class="btn open" title="Open in editor (or double-click a row)">&lt;&gt; source</button></div>' +
     '  </div>' +
     '</div>';
 
@@ -102,7 +103,7 @@
   hlBox.style.display = 'none';
   root.appendChild(hlBox);
 
-  var footEl = $('.foot'), locEl = $('.loc'), openBtn = $('.open');
+  var footEl = $('.foot'), locEl = $('.loc'), openBtn = $('.open'), ideEl = $('.ide');
   var selected = null, inspecting = false, rowByEl = new Map();
   var collapsed = new Set(), collapsibleKeys = [];
 
@@ -121,8 +122,33 @@
   function entryFor(el) {
     return manifest ? manifest[el.getAttribute(ATTR)] : null;
   }
+
+  // Known editors (URL scheme templates). `window.__elmViewEditor` (string or
+  // fn) still wins as an advanced override.
+  var EDITORS = [
+    { id: 'vscode', label: 'VS Code', tmpl: 'vscode://file/{file}:{line}' },
+    { id: 'vscode-insiders', label: 'VS Code Insiders', tmpl: 'vscode-insiders://file/{file}:{line}' },
+    { id: 'cursor', label: 'Cursor', tmpl: 'cursor://file/{file}:{line}' },
+    { id: 'windsurf', label: 'Windsurf', tmpl: 'windsurf://file/{file}:{line}' },
+    { id: 'zed', label: 'Zed', tmpl: 'zed://file/{file}:{line}' },
+    { id: 'jetbrains', label: 'JetBrains', tmpl: 'http://localhost:63342/api/file/{file}:{line}' },
+    { id: 'textmate', label: 'TextMate', tmpl: 'txmt://open?url=file://{file}&line={line}' },
+    { id: 'sublime', label: 'Sublime', tmpl: 'subl://open?url=file://{file}&line={line}' },
+  ];
+  var LS_KEY = 'elmViewEditor';
+  function storedEditor() {
+    try { return localStorage.getItem(LS_KEY); } catch (e) { return null; }
+  }
+  function currentTmpl() {
+    if (typeof window.__elmViewEditor === 'function') return window.__elmViewEditor;
+    var id = storedEditor();
+    var e = EDITORS.filter(function (x) { return x.id === id; })[0];
+    if (e) return e.tmpl;
+    if (typeof window.__elmViewEditor === 'string') return window.__elmViewEditor;
+    return EDITORS[0].tmpl;
+  }
   function editorUrl(entry) {
-    var tmpl = window.__elmViewEditor || 'vscode://file/{file}:{line}';
+    var tmpl = currentTmpl();
     if (typeof tmpl === 'function') return tmpl(entry.file, entry.line);
     return tmpl.replace('{file}', entry.file).replace('{line}', String(entry.line));
   }
@@ -332,6 +358,19 @@
   }
 
   // ---- wiring ------------------------------------------------------------
+  // editor picker ("Open in…"), persisted to localStorage
+  EDITORS.forEach(function (e) {
+    var o = document.createElement('option');
+    o.value = e.id;
+    o.textContent = e.label;
+    ideEl.appendChild(o);
+  });
+  ideEl.value = storedEditor() || 'vscode';
+  if (typeof window.__elmViewEditor === 'function') { ideEl.disabled = true; ideEl.title = 'Overridden by window.__elmViewEditor'; }
+  ideEl.addEventListener('change', function () {
+    try { localStorage.setItem(LS_KEY, ideEl.value); } catch (e) {}
+  });
+
   inspBtn.addEventListener('click', function () { setInspect(!inspecting); });
   openBtn.addEventListener('click', function () { if (selected) openSource(selected); });
   $('.ref').addEventListener('click', build);
