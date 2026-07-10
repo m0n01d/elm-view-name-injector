@@ -209,7 +209,7 @@
   function wire(row, el) {
     row.addEventListener('mouseenter', function () { if (!inspecting) hover(el); });
     row.addEventListener('mouseleave', clearHover);
-    row.addEventListener('click', function () { select(el); });
+    row.addEventListener('click', function () { selected === el ? deselect() : select(el); });
     row.addEventListener('dblclick', function () { openSource(el); });
     rowByEl.set(el, row);
     if (selected === el) row.classList.add('sel');
@@ -301,6 +301,13 @@
     return d;
   }
 
+  function deselect() {
+    selected = null;
+    root.querySelectorAll('.row.sel').forEach(function (r) { r.classList.remove('sel'); });
+    hlBox.style.display = 'none';
+    updateFoot(null);
+  }
+
   function select(el) {
     selected = el;
     root.querySelectorAll('.row.sel').forEach(function (r) { r.classList.remove('sel'); });
@@ -373,6 +380,12 @@
 
   inspBtn.addEventListener('click', function () { setInspect(!inspecting); });
   openBtn.addEventListener('click', function () { if (selected) openSource(selected); });
+  // Escape cancels inspect mode, else clears the current selection
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (inspecting) setInspect(false);
+    else if (selected) deselect();
+  });
   $('.ref').addEventListener('click', build);
   $('.tog').addEventListener('click', function () { setCollapsed(true); });
   $('.coll').addEventListener('click', function () {

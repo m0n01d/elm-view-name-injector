@@ -6,10 +6,12 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- load the TAGGED bundle produced by `npm run build:example` -->
-    <script src="out.tagged.js"></script>
+    <!-- load the TAGGED bundle (cache-busted so rebuilds always take effect) -->
     <script>
-      Elm.Main.init({ node: document.getElementById('root') });
+      var s = document.createElement('script');
+      s.src = 'out.tagged.js?t=' + Date.now();
+      s.onload = function () { Elm.Main.init({ node: document.getElementById('root') }); };
+      document.body.appendChild(s);
     </script>
   </body>
 </html>
