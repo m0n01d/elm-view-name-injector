@@ -15,6 +15,8 @@ Point at any element in the browser and know which Elm function rendered it.
 No source changes, **no wrapper nodes**, no runtime library — it edits the
 compiled JS.
 
+![The in-page overlay: a live component tree, the selected view highlighted in the page, and a footer with file:line + an "Open in…" editor picker for jump-to-source](docs/overlay.png)
+
 > Status: proof-of-concept. Works against Elm 0.19.1 output in standard **and
 > `--debug`** modes. Intended as a **dev/QA build-time tool**, not for
 > production bundles.
