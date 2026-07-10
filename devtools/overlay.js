@@ -31,8 +31,9 @@
     '*{box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}' +
     '.hl{position:fixed;pointer-events:none;border:1px solid ' + ACCENT + ';background:rgba(124,197,255,.15);border-radius:2px;transition:all .05s}' +
     '.hl .tag{position:absolute;top:-18px;left:0;background:' + ACCENT + ';color:#04223a;font-size:11px;font-weight:600;padding:1px 5px;border-radius:3px;white-space:nowrap}' +
-    '.panel{pointer-events:auto;position:fixed;right:12px;bottom:12px;width:360px;max-height:60vh;display:flex;flex-direction:column;background:#0f1720;color:#d7e0ea;border:1px solid #263241;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.45);font-size:12px;overflow:hidden}' +
-    '.hd{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#131e2a;border-bottom:1px solid #263241;cursor:default}' +
+    '.panel{pointer-events:auto;position:fixed;width:360px;height:min(60vh,520px);min-width:230px;min-height:150px;display:flex;flex-direction:column;background:#0f1720;color:#d7e0ea;border:1px solid #263241;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,.45);font-size:12px;overflow:hidden;resize:both}' +
+    '.panel.min{height:auto!important;resize:none}' +
+    '.hd{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#131e2a;border-bottom:1px solid #263241;cursor:move;user-select:none}' +
     '.hd .ttl{font-weight:700;flex:1}.hd .ct{opacity:.6;font-weight:400}' +
     '.btn{pointer-events:auto;background:#1c2836;color:#d7e0ea;border:1px solid #2d3c4d;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:12px;line-height:1}' +
     '.btn:hover{background:#26374a}.btn.on{background:' + ACCENT + ';color:#04223a;border-color:' + ACCENT + '}' +
@@ -161,17 +162,41 @@
   }
 
   // ---- wiring ------------------------------------------------------------
+  function toggleMin() {
+    var min = panel.classList.toggle('min');
+    togBtn.textContent = min ? '▸' : '▾';
+  }
+
   inspBtn.addEventListener('click', function () { setInspect(!inspecting); });
   $('.ref').addEventListener('click', build);
   searchEl.addEventListener('input', build);
-  togBtn.addEventListener('click', function () {
-    var min = panel.classList.toggle('min');
-    togBtn.textContent = min ? '▸' : '▾';
+  togBtn.addEventListener('click', toggleMin);
+
+  // ---- drag the panel by its header (click w/o moving = collapse) ---------
+  var hd = $('.hd'), drag = null;
+  panel.style.left = Math.max(8, window.innerWidth - 372) + 'px';
+  panel.style.top = '56px';
+  hd.addEventListener('mousedown', function (e) {
+    if (e.target.closest('.btn')) return; // let buttons be buttons
+    var r = panel.getBoundingClientRect();
+    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, sx: e.clientX, sy: e.clientY, moved: false };
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    e.preventDefault();
   });
-  $('.hd').addEventListener('click', function (e) {
-    if (e.target.classList.contains('btn')) return;
-    var min = panel.classList.toggle('min');
-    togBtn.textContent = min ? '▸' : '▾';
+  window.addEventListener('mousemove', function (e) {
+    if (!drag) return;
+    if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 3) drag.moved = true;
+    var w = panel.offsetWidth, h = panel.offsetHeight;
+    panel.style.left = Math.min(Math.max(0, e.clientX - drag.dx), Math.max(0, window.innerWidth - w)) + 'px';
+    panel.style.top = Math.min(Math.max(0, e.clientY - drag.dy), Math.max(0, window.innerHeight - h)) + 'px';
+    if (selected) highlight(selected);
+  });
+  window.addEventListener('mouseup', function () {
+    if (!drag) return;
+    var wasClick = !drag.moved;
+    drag = null;
+    if (wasClick) toggleMin();
   });
 
   // keep the selected highlight glued to the element on scroll/resize
