@@ -27,15 +27,15 @@ function arg(name, fallback) {
   return fallback;
 }
 
-const uiDir = path.resolve(arg('ui', '/Users/dwightdoane/AVETTA/ui'));
-const target = arg('target', 'Client');
+const uiDir = path.resolve(arg('ui', '../ui'));
+const target = arg('target', 'Main');
 const attr = arg('attr', 'elm-view-name');
 const wrap = !!arg('wrap', false);
 
 const binDir = path.join(uiDir, 'node_modules', '.bin');
 const elmWatch = path.join(binDir, 'elm-watch');
 if (!fs.existsSync(elmWatch)) {
-  console.error(`elm-watch not found at ${elmWatch} — is --ui correct?`);
+  console.error(`elm-watch not found at ${elmWatch} — pass --ui <path-to-elm-watch-project>`);
   process.exit(1);
 }
 

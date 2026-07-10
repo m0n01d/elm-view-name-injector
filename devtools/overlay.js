@@ -232,7 +232,7 @@
 
     if (!els.length) {
       ctEl.textContent = '';
-      treeEl.innerHTML = '<div class="empty">No <code>elm-view-name</code> elements found.<br>Build with the injector (ELM_VIEW_NAMES=1) and reload.</div>';
+      treeEl.innerHTML = '<div class="empty">No <code>elm-view-name</code> elements found.<br>Build with the injector and reload.</div>';
       return;
     }
     ctEl.textContent = '(' + els.length + ' • ' + names.size + ')';

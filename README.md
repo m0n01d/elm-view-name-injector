@@ -21,30 +21,28 @@ compiled JS.
 > `--debug`** modes. Intended as a **dev/QA build-time tool**, not for
 > production bundles.
 
-## ⚠️ Experimental — how we run it today
+## ⚠️ Experimental — how to run it
 
-Still early, so it's off by default and gated behind an env var. Nothing happens
-unless you opt in, and production builds are never touched.
-
-In the ui repo (after wiring the one-time postprocess hook — see
-[integrations/elm-watch-postprocess.md](integrations/elm-watch-postprocess.md)):
+Still early — a **dev/QA build-time tool**, never for production. Wire it into
+your project's elm-watch postprocess once (see
+[integrations/elm-watch-postprocess.md](integrations/elm-watch-postprocess.md))
+and it's on in every dev/debug build — no flag:
 
 ```sh
-ELM_VIEW_NAMES=1 npm start      # turn it on for this dev session
+npm start        # or however you launch elm-watch hot
 ```
 
-Then open the app, flip the target to **Debug** in the elm-watch overlay, and
-inspect `[elm-view-name]` in DevTools.
+Open the app (flip to **Debug** in the elm-watch overlay for the time-travel
+debugger too) and the overlay badge appears top-right.
 
-- **No env var = off.** Normal `npm start` and `npm run build` behave exactly as
-  before.
-- **Restart after changing the flag** — the dev server reads it at startup.
-- **Big apps cost a few seconds per hot reload** (Client/Config), since it
-  re-parses the whole bundle. Flip the flag off when you're not inspecting.
+- **Production-safe.** Skipped in `optimize` mode, so `npm run build` is never
+  affected.
+- **Restart after wiring/changing the hook** — elm-watch loads it at startup.
+- **Big apps cost a few seconds per recompile**, since it re-parses the bundle.
+  Scope it to one target, or gate it behind an env var, if that bites.
 
-Since it's experimental, expect rough edges — if a page renders blank or the
-console fills with errors, turn the flag off and let us know what you were
-looking at.
+Expect rough edges — if a page renders blank or the console fills with errors,
+disable the hook and note what you were looking at.
 
 ### 🧪 In-page overlay (DevTools-style panel)
 
@@ -63,8 +61,8 @@ node bin/cli.js out.js -i --overlay
 # example demo
 node scripts/build-example.js --overlay && python3 -m http.server 8123 --directory example
 
-# ui repo (with the postprocess hook)
-ELM_VIEW_NAMES=overlay npm start
+# elm-watch project (with the postprocess hook): always on — just run it
+npm start
 ```
 
 The panel mounts in a shadow DOM on `<html>`, so it survives Elm re-renders

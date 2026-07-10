@@ -1,55 +1,60 @@
-# Live tagging under `elm-watch hot` (the ui repo)
+# Always-on overlay under `elm-watch`
 
 The one-shot `scripts/try-on-elm-watch.mjs` is fine for a snapshot, but it gets
-overwritten on the next hot recompile. To tag **every** hot reload
-automatically, hook the injector into the existing elm-watch postprocess.
+overwritten on the next hot recompile. To tag **every** build automatically and
+always show the overlay, hook the injector into your project's elm-watch
+postprocess.
 
-This assumes the injector repo sits next to the ui repo:
+This assumes the injector repo sits next to your Elm project:
 
-    …/AVETTA/ui
-    …/AVETTA/elm-view-name-injector   <- sibling
+    …/your-project/          <- your elm-watch app (has scripts/elm-watch-postprocess.mjs)
+    …/elm-view-name-injector <- sibling
 
-## Edit `ui/scripts/elm-watch-postprocess.mjs`
+If your project doesn't have a postprocess yet, add one in `elm-watch.json`:
 
-Add an import near the top:
+```json
+{ "postprocess": ["elm-watch-node", "scripts/elm-watch-postprocess.mjs"] }
+```
+
+## Edit `scripts/elm-watch-postprocess.mjs`
+
+Near the top, require the sibling injector (safe if it's missing):
 
 ```js
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 
-// Inert unless ELM_VIEW_NAMES is set, so this is SAFE TO COMMIT — it changes
-// nothing in normal builds. Resolves the sibling injector repo.
-const viewNames = process.env.ELM_VIEW_NAMES
-  ? require("../../elm-view-name-injector/src/inject-view-names.js")
-  : null;
+// Tags view fns + appends the in-page overlay in dev/debug builds — always on.
+// No-ops if the sibling repo isn't cloned; skipped in optimize (see below), so
+// production is unaffected.
+let viewNames = null;
+try {
+  viewNames = require("../../elm-view-name-injector/src/inject-view-names.js");
+} catch (e) {
+  // sibling repo not present — dev build proceeds without the overlay
+}
 ```
 
-Then change the `postprocess` function so dev/hot builds get tagged:
+Then in your `postprocess`, run it for non-`optimize` builds:
 
 ```js
-const postprocess = async ({ code, compilationMode, runMode }) => {
+const postprocess = async ({ code, compilationMode }) => {
   if (compilationMode === "optimize") {
-    return minify(await transform(code, false, true, false)); // unchanged
+    return code; // (or your minifier) — production untouched
   }
-  // standard / debug / hot: optionally inject view names.
-  //   ELM_VIEW_NAMES=1        -> tag elements only
-  //   ELM_VIEW_NAMES=overlay  -> tag + append the in-page DevTools overlay
-  return viewNames
-    ? viewNames.transform(code, { overlay: process.env.ELM_VIEW_NAMES === 'overlay' }).code
-    : code;
+  return viewNames ? viewNames.transform(code, { overlay: true }).code : code;
 };
 ```
 
 ## Run
 
 ```sh
-cd ui
-ELM_VIEW_NAMES=1 npm start        # hot dev, every reload tags views
-# (plain `npm start` = off, production `npm run build` = untouched)
+npm start        # or however you launch elm-watch hot — no flag needed
 ```
 
-Now every recompile — including your WS-5278 changes — re-tags automatically.
-Inspect in DevTools:
+Toggle **Debug** in the elm-watch overlay if you want the time-travel debugger
+too; the injector's badge parks top-right so the two don't collide. Inspect in
+DevTools:
 
 ```js
 document.querySelectorAll('[elm-view-name]')
@@ -58,12 +63,14 @@ $0.getAttribute('elm-view-name')   // pick an element, see which fn rendered it
 
 ## Notes
 
-- **Off by default / production-safe.** Guarded by `ELM_VIEW_NAMES` and skipped in
-  `optimize` mode, so `npm run build` is never affected. Committing the edit is
-  harmless.
-- **Perf.** The transform re-parses/prints the bundle. On the ~2.8 MB Client app
-  expect a couple extra seconds per hot reload. Small apps are instant.
-- **Prereq.** `cd ../elm-view-name-injector && npm install` once (for its
-  Babel/recast deps).
-- **No PR pollution.** `public/pre-compiled/**` is gitignored; this edit is the
-  only touched tracked file, and it's inert without the env var.
+- **Production-safe.** Skipped in `optimize` mode, so production builds are never
+  affected.
+- **Perf.** The transform re-parses the bundle; on a multi-MB app expect a few
+  extra seconds per hot recompile. If that's too much, scope it to the target
+  you're working on, or gate it behind an env var.
+- **Prereq.** `cd ../elm-view-name-injector && npm install` once (Babel deps).
+- **Jump-to-source.** Generate a manifest so the overlay can open files:
+  `node ../elm-view-name-injector/bin/manifest.js . -o public/elm-view-manifest.json`
+  (the overlay fetches `/elm-view-manifest.json` when nothing is embedded).
+- **No diff pollution.** elm-watch's compiled output is typically gitignored, so
+  only this one script file changes.
