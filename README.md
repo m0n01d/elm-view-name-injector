@@ -44,6 +44,31 @@ Since it's experimental, expect rough edges — if a page renders blank or the
 console fills with errors, turn the flag off and let us know what you were
 looking at.
 
+### 🧪 In-page overlay (DevTools-style panel)
+
+A tiny built-in panel that reads the `elm-view-name` attributes and gives you a
+live **component tree**, **hover-to-highlight**, **click-to-select**, an
+**inspect mode** (🎯 click any element on the page → find it in the tree), and
+**search**. It's a pure viewer — no extra data injected, just a UI over the
+attributes.
+
+Enable it by appending the overlay runtime to the bundle:
+
+```sh
+# CLI
+node bin/cli.js out.js -i --overlay
+
+# example demo
+node scripts/build-example.js --overlay && python3 -m http.server 8123 --directory example
+
+# ui repo (with the postprocess hook)
+ELM_VIEW_NAMES=overlay npm start
+```
+
+The panel mounts in a shadow DOM on `<html>`, so it survives Elm re-renders
+(even `Browser.application`, which owns `<body>`) and its styling can't leak into
+the app.
+
 ---
 
 ## Why not elm-review / a runtime helper?

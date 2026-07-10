@@ -36,6 +36,7 @@ execFileSync(elm, args, { cwd: exampleDir, stdio: 'inherit' });
 
 const { code, stats } = transform(fs.readFileSync(raw, 'utf8'), {
   wrap: process.argv.includes('--wrap'),
+  overlay: process.argv.includes('--overlay'),
 });
 fs.writeFileSync(tagged, code);
 

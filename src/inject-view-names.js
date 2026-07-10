@@ -26,6 +26,8 @@
  * the whole AST — the latter is ~50x slower on multi-MB Elm bundles.
  */
 
+const fs = require('fs');
+const path = require('path');
 const babelParser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const t = require('@babel/types');
@@ -34,7 +36,16 @@ const DEFAULTS = {
   prefix: '$author$project$', // Elm hard-codes this for application (non-package) code
   attr: 'elm-view-name',
   wrap: false,
+  overlay: false, // append the in-page DevTools overlay runtime (experimental)
 };
+
+let _overlaySrc = null;
+function overlaySource() {
+  if (_overlaySrc === null) {
+    _overlaySrc = fs.readFileSync(path.join(__dirname, '..', 'devtools', 'overlay.js'), 'utf8');
+  }
+  return _overlaySrc;
+}
 
 // elm/html element constructors: `$elm$html$Html$<lowercaseTag>` (div, span, main_, ...).
 // `map` (arg 1 is a child) and `node` (arity 3 — as A2 it's a partial application
@@ -239,6 +250,10 @@ function transform(code, options = {}) {
     if (e.end > lastStart) continue; // overlap guard
     out = out.slice(0, e.start) + e.text + out.slice(e.end);
     lastStart = e.start;
+  }
+
+  if (opts.overlay) {
+    out += '\n;/* elm-view-name overlay */\n' + overlaySource() + '\n';
   }
 
   return { code: out, stats };

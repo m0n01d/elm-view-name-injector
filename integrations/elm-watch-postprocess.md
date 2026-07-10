@@ -31,8 +31,12 @@ const postprocess = async ({ code, compilationMode, runMode }) => {
   if (compilationMode === "optimize") {
     return minify(await transform(code, false, true, false)); // unchanged
   }
-  // standard / debug / hot: optionally inject view names
-  return viewNames ? viewNames.transform(code).code : code;
+  // standard / debug / hot: optionally inject view names.
+  //   ELM_VIEW_NAMES=1        -> tag elements only
+  //   ELM_VIEW_NAMES=overlay  -> tag + append the in-page DevTools overlay
+  return viewNames
+    ? viewNames.transform(code, { overlay: process.env.ELM_VIEW_NAMES === 'overlay' }).code
+    : code;
 };
 ```
 

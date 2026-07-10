@@ -42,6 +42,9 @@ function parseArgs(argv) {
       case '--wrap':
         transformOpts.wrap = true;
         break;
+      case '--overlay':
+        transformOpts.overlay = true;
+        break;
       case '-o':
       case '--output':
         opts.output = argv[++i];
@@ -89,6 +92,7 @@ function printHelp() {
       '      --attr <name>    attribute name (default: elm-view-name)',
       '      --prefix <str>   app symbol prefix (default: $author$project$)',
       '      --wrap           also tag text/map/lazy via a display:contents div',
+      '      --overlay        append the in-page DevTools overlay (experimental)',
       '      --stats          print tag counts to stderr',
       '  -h, --help           show this help',
       '',
