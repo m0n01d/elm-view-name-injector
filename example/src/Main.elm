@@ -147,6 +147,15 @@ viewCustomNode =
     node "custom-element" [ id "custom" ] [ text "custom" ]
 
 
+{-| REGRESSION: partially-applied `Html.node` -> compiles to
+    `var customTag = A2($elm$html$Html$node, "my-element", attrs);` — an arity-3
+    fn as A2 whose arg 1 is the TAG string, NOT attrs. Must NOT be spliced;
+    doing so made the tag `[object Object]` and crashed rendering in avt-cfg. -}
+customTag : List (Html Msg) -> Html Msg
+customTag =
+    node "my-element" [ class "custom" ]
+
+
 viewConsAttrs : Bool -> Html Msg
 viewConsAttrs flag =
     div
@@ -251,6 +260,7 @@ view model =
         , viewLazy model
         , viewKeyed model
         , viewCustomNode
+        , customTag [ text "partial node" ]
         , viewConsAttrs True
         , viewChildrenMap [ "x", "y" ]
         , viewOneAttr

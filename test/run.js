@@ -85,6 +85,7 @@ const SHOULD_NOT_TAG = [
   'Main.init',          // record value
   'Main.update',        // returns model records
   'Page.Home.view',     // returns Layout.page(...) — cross-module delegation; Ui.Layout.page self-tags
+  'Main.customTag',     // partially-applied Html.node — must NOT be spliced (regression)
 ];
 
 console.log('\nsplice coverage');
@@ -114,6 +115,18 @@ check('tags survive across 7 modules', () => {
 check('distinct `view`s in different modules stay distinct', () => {
   assert.ok(has('Main.view') && has('Widget.Counter.view') && has('Page.Settings.Form.view'));
 });
+
+console.log('\nregression: partially-applied Html.node (arity-3 as A2)');
+check('does not splice into Html.node tag slot (would crash: tag = [object Object])', () => {
+  // the tag string must remain the 2nd arg of A2(Html.node, ...), un-consed
+  assert.ok(
+    /A2\(\s*\$elm\$html\$Html\$node\s*,\s*'my-element'/.test(code),
+    'Html.node tag slot was corrupted by injection'
+  );
+});
+check('fully-applied Html.node (A3) is still tagged', () =>
+  assert.ok(has('Main.viewCustomNode'), 'A3 node tagging regressed')
+);
 
 console.log('\noutput validity');
 check('transformed bundle is still valid JS', () =>

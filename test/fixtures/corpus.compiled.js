@@ -5215,6 +5215,18 @@ var $elm$html$Html$Attributes$stringProperty = F2(
 			$elm$json$Json$Encode$string(string));
 	});
 var $elm$html$Html$Attributes$class = $elm$html$Html$Attributes$stringProperty('className');
+var $elm$virtual_dom$VirtualDom$node = function (tag) {
+	return _VirtualDom_node(
+		_VirtualDom_noScript(tag));
+};
+var $elm$html$Html$node = $elm$virtual_dom$VirtualDom$node;
+var $author$project$Main$customTag = A2(
+	$elm$html$Html$node,
+	'my-element',
+	_List_fromArray(
+		[
+			$elm$html$Html$Attributes$class('custom')
+		]));
 var $elm$html$Html$div = _VirtualDom_node('div');
 var $elm$html$Html$Attributes$id = $elm$html$Html$Attributes$stringProperty('id');
 var $elm$virtual_dom$VirtualDom$Normal = function (a) {
@@ -5586,11 +5598,6 @@ var $author$project$Main$viewConsAttrs = function (flag) {
 				$elm$html$Html$text('cons attrs')
 			]));
 };
-var $elm$virtual_dom$VirtualDom$node = function (tag) {
-	return _VirtualDom_node(
-		_VirtualDom_noScript(tag));
-};
-var $elm$html$Html$node = $elm$virtual_dom$VirtualDom$node;
 var $author$project$Main$viewCustomNode = A3(
 	$elm$html$Html$node,
 	'custom-element',
@@ -5785,6 +5792,11 @@ var $author$project$Main$view = function (model) {
 				$author$project$Main$viewLazy(model),
 				$author$project$Main$viewKeyed(model),
 				$author$project$Main$viewCustomNode,
+				$author$project$Main$customTag(
+				_List_fromArray(
+					[
+						$elm$html$Html$text('partial node')
+					])),
 				$author$project$Main$viewConsAttrs(true),
 				$author$project$Main$viewChildrenMap(
 				_List_fromArray(

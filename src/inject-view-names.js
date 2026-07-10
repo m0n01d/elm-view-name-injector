@@ -21,16 +21,14 @@
  *              or  `A3($elm$html$Html$node|Keyed$node, tag, attrs, kids)` -> arg[2]
  *   - attrs + event handlers live in the SAME list, so we just cons onto it.
  *
- * No Elm type information is used or needed. Values whose root is not an element
- * (text/map/lazy/delegation/records/lists) are simply left untagged (safe).
- * `--wrap` optionally tags the stdlib-opaque Html forms (text/map/lazy) by
- * wrapping them in a `display:contents` div; see README for the tradeoff.
+ * Injection is done by *offset splicing* the original source (parse once for
+ * node ranges, replace attr-list sub-ranges by string) rather than reprinting
+ * the whole AST — the latter is ~50x slower on multi-MB Elm bundles.
  */
 
-const recast = require('recast');
+const babelParser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const t = require('@babel/types');
-const babelParser = require('@babel/parser');
 
 const DEFAULTS = {
   prefix: '$author$project$', // Elm hard-codes this for application (non-package) code
@@ -38,10 +36,13 @@ const DEFAULTS = {
   wrap: false,
 };
 
-// elm/html element constructors: `$elm$html$Html$<lowercaseTag>` (div, span, main_, ...)
-// `map` matches the shape but is NOT an element -> blocklist it.
+// elm/html element constructors: `$elm$html$Html$<lowercaseTag>` (div, span, main_, ...).
+// `map` (arg 1 is a child) and `node` (arity 3 — as A2 it's a partial application
+// whose arg 1 is the TAG string, NOT attrs) match the shape but are NOT 2-arity
+// elements, so they must be blocklisted here. `node` is still tagged via the A3
+// branch when fully applied.
 const A2_ELEMENT_RE = /^\$elm\$html\$Html\$[a-z][A-Za-z0-9_]*$/;
-const A2_BLOCKLIST = new Set(['$elm$html$Html$map']);
+const A2_BLOCKLIST = new Set(['$elm$html$Html$map', '$elm$html$Html$node']);
 // arity-3 element constructors (custom + keyed nodes): attrs is the 3rd arg.
 const A3_ELEMENTS = new Set(['$elm$html$Html$node', '$elm$html$Html$Keyed$node']);
 // stdlib-opaque Html values we can safely `--wrap` (definitely Html, no attr slot).
@@ -64,44 +65,44 @@ function demangle(name, prefix) {
   return parts.slice(0, -1).join('.') + '.' + parts[parts.length - 1];
 }
 
+/** A primitive literal can never be an attribute list — guards against splicing
+ *  into the wrong slot (e.g. a partially-applied fn whose arg is a tag string). */
+function isLiteralArg(node) {
+  return (
+    t.isStringLiteral(node) ||
+    t.isNumericLiteral(node) ||
+    t.isBooleanLiteral(node) ||
+    t.isNullLiteral(node) ||
+    t.isTemplateLiteral(node)
+  );
+}
+
 /** Is this expression node an Html element ctor call? Returns { attrsIndex } or null. */
 function classifyElement(node) {
   if (!t.isCallExpression(node) || !t.isIdentifier(node.callee)) return null;
   const args = node.arguments;
+  let attrsIndex = null;
   if (node.callee.name === 'A2' && args.length >= 3 && t.isIdentifier(args[0])) {
     const fn = args[0].name;
-    if (A2_ELEMENT_RE.test(fn) && !A2_BLOCKLIST.has(fn)) return { attrsIndex: 1 };
+    if (A2_ELEMENT_RE.test(fn) && !A2_BLOCKLIST.has(fn)) attrsIndex = 1;
+  } else if (node.callee.name === 'A3' && args.length >= 4 && t.isIdentifier(args[0])) {
+    if (A3_ELEMENTS.has(args[0].name)) attrsIndex = 2;
   }
-  if (node.callee.name === 'A3' && args.length >= 4 && t.isIdentifier(args[0])) {
-    if (A3_ELEMENTS.has(args[0].name)) return { attrsIndex: 2 };
-  }
-  return null;
+  if (attrsIndex === null) return null;
+  // Defensive: the attrs slot must not be a primitive literal.
+  if (isLiteralArg(args[attrsIndex])) return null;
+  return { attrsIndex };
 }
 
 /** stdlib-opaque Html value (text/map/lazy) usable with --wrap? */
 function isOpaqueHtml(node) {
   if (!t.isCallExpression(node)) return false;
   if (t.isIdentifier(node.callee) && OPAQUE_HTML.has(node.callee.name)) return true; // text(x)
-  // A2(map|lazy, ...) / A3(...) forms
   if (t.isIdentifier(node.callee) && /^A\d+$/.test(node.callee.name)) {
     const first = node.arguments[0];
     if (t.isIdentifier(first) && OPAQUE_HTML.has(first.name)) return true;
   }
   return false;
-}
-
-// Kernel helper `_VirtualDom_attribute` (what `Html.Attributes.attribute`
-// compiles down to). It's a kernel F2 always present in any Html app, so unlike
-// `$elm$html$Html$Attributes$attribute` it is NEVER tree-shaken away — even if
-// the app's own source never calls `Html.Attributes.attribute`.
-const ATTR_HELPER = '_VirtualDom_attribute';
-
-function attributeCall(qname, attrName) {
-  return t.callExpression(t.identifier('A2'), [
-    t.identifier(ATTR_HELPER),
-    t.stringLiteral(attrName),
-    t.stringLiteral(qname),
-  ]);
 }
 
 /** True if the attrs arg already begins with our injected attribute (idempotency). */
@@ -123,8 +124,6 @@ function alreadyTagged(attrsNode, attrName) {
 /** Collect the leaf Html-producing expression paths for a declaration's init. */
 function collectPositions(initPath) {
   const node = initPath.node;
-
-  // Unwrap F2/F3/... arity wrappers -> the inner function.
   if (
     t.isCallExpression(node) &&
     t.isIdentifier(node.callee) &&
@@ -134,13 +133,10 @@ function collectPositions(initPath) {
   ) {
     return expandConditionals(collectReturns(initPath.get('arguments.0')));
   }
-
   if (t.isFunctionExpression(node) || t.isArrowFunctionExpression(node)) {
     return expandConditionals(collectReturns(initPath));
   }
-
-  // Bare value: the initializer itself is the rendered expression.
-  return expandConditionals([initPath]);
+  return expandConditionals([initPath]); // bare value
 }
 
 /** Every `return <expr>` in a function body, NOT descending into nested closures. */
@@ -173,13 +169,25 @@ function expandConditionals(paths) {
   return out;
 }
 
+// Kernel helper `_VirtualDom_attribute` (what `Html.Attributes.attribute` compiles
+// to). A kernel F2 always present in any Html app, so — unlike
+// `$elm$html$Html$Attributes$attribute` — it is NEVER tree-shaken away, even if
+// the app's own source never calls `Html.Attributes.attribute`.
+const ATTR_HELPER = '_VirtualDom_attribute';
+
+function jsStr(s) {
+  return JSON.stringify(String(s));
+}
+function attrExpr(qname, attrName) {
+  return `A2(${ATTR_HELPER}, ${jsStr(attrName)}, ${jsStr(qname)})`;
+}
+
 function transform(code, options = {}) {
   const opts = { ...DEFAULTS, ...options };
   const stats = { spliced: 0, wrapped: 0, skipped: 0, tagged: [] };
+  const edits = []; // { start, end, text }
 
-  const ast = recast.parse(code, {
-    parser: { parse: (src) => babelParser.parse(src, { sourceType: 'script' }) },
-  });
+  const ast = babelParser.parse(code, { sourceType: 'script' });
 
   traverse(ast, {
     VariableDeclarator(path) {
@@ -190,20 +198,28 @@ function transform(code, options = {}) {
       if (!qname) return;
 
       for (const exprPath of collectPositions(path.get('init'))) {
-        const el = classifyElement(exprPath.node);
+        const node = exprPath.node;
+        const el = classifyElement(node);
         if (el) {
-          const attrsPath = exprPath.get('arguments.' + el.attrsIndex);
-          if (alreadyTagged(attrsPath.node, opts.attr)) continue;
-          attrsPath.replaceWith(
-            t.callExpression(t.identifier('_List_Cons'), [
-              attributeCall(qname, opts.attr),
-              attrsPath.node,
-            ])
-          );
+          const attrsNode = node.arguments[el.attrsIndex];
+          if (alreadyTagged(attrsNode, opts.attr)) continue;
+          const orig = code.slice(attrsNode.start, attrsNode.end);
+          edits.push({
+            start: attrsNode.start,
+            end: attrsNode.end,
+            text: `_List_Cons(${attrExpr(qname, opts.attr)}, ${orig})`,
+          });
           stats.spliced++;
           stats.tagged.push(qname);
-        } else if (opts.wrap && isOpaqueHtml(exprPath.node)) {
-          exprPath.replaceWith(wrapNode(exprPath.node, qname, opts.attr));
+        } else if (opts.wrap && isOpaqueHtml(node)) {
+          const orig = code.slice(node.start, node.end);
+          const contents = `A2(${ATTR_HELPER}, "style", "display:contents")`;
+          const attrs = `_List_Cons(${attrExpr(qname, opts.attr)}, _List_Cons(${contents}, _List_Nil))`;
+          edits.push({
+            start: node.start,
+            end: node.end,
+            text: `A2($elm$html$Html$div, ${attrs}, _List_fromArray([${orig}]))`,
+          });
           stats.wrapped++;
           stats.tagged.push(qname + ' (wrapped)');
         } else {
@@ -213,23 +229,19 @@ function transform(code, options = {}) {
     },
   });
 
-  return { code: recast.print(ast).code, stats };
-}
+  // Apply edits back-to-front so earlier offsets stay valid. Edits target
+  // disjoint sub-ranges (attr lists / opaque leaves), so ordering by start is
+  // sufficient; skip any accidental overlap defensively.
+  edits.sort((a, b) => b.start - a.start);
+  let out = code;
+  let lastStart = Infinity;
+  for (const e of edits) {
+    if (e.end > lastStart) continue; // overlap guard
+    out = out.slice(0, e.start) + e.text + out.slice(e.end);
+    lastStart = e.start;
+  }
 
-/** Wrap an opaque Html value in a layout-neutral `display:contents` div. */
-function wrapNode(node, qname, attrName) {
-  const nameAttr = attributeCall(qname, attrName);
-  const displayContents = t.callExpression(t.identifier('A2'), [
-    t.identifier(ATTR_HELPER),
-    t.stringLiteral('style'),
-    t.stringLiteral('display:contents'),
-  ]);
-  const attrs = t.callExpression(t.identifier('_List_Cons'), [
-    nameAttr,
-    t.callExpression(t.identifier('_List_Cons'), [displayContents, t.identifier('_List_Nil')]),
-  ]);
-  const kids = t.callExpression(t.identifier('_List_fromArray'), [t.arrayExpression([node])]);
-  return t.callExpression(t.identifier('A2'), [t.identifier('$elm$html$Html$div'), attrs, kids]);
+  return { code: out, stats };
 }
 
 module.exports = { transform, demangle, classifyElement };

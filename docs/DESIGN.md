@@ -91,6 +91,21 @@ Consing onto *whatever the attrs expression is* means we don't case on its shape
   with our `_VirtualDom_attribute "elm-view-name"` cons).
 - `--wrap` uses `_VirtualDom_attribute "style" "display:contents"` so it depends
   on no tree-shakable symbol and stays layout-neutral.
+- **Arity-3 fns as A2 (partial application).** `Html.node` matches the A2 element
+  regex (`node` is lowercase) but is arity 3 — as `A2(node, tag, attrs)` (a
+  partial application) its arg 1 is the TAG string, not attrs. Splicing there set
+  the tag to our attribute object → `createElement('[object Object]')` and a
+  render crash (found in avt-cfg, where one such helper was reused ~700×). Fix:
+  blocklist `node` in the A2 branch (still tagged via the A3 branch when fully
+  applied) **and** never splice when the attrs slot is a primitive literal.
+
+## Performance
+
+Injection is done by **offset splicing** the original source — parse once for
+node ranges, then replace attr-list sub-ranges by string offset — not by
+reprinting the AST. Reprinting (recast) a ~2.5 MB Elm bundle took ~100 s; offset
+splicing does it in ~8 s (dominated by parse + traverse). Edits target disjoint
+sub-ranges and are applied back-to-front so offsets stay valid.
 
 ## Open questions / future work
 
