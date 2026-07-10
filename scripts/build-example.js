@@ -14,6 +14,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { transform } = require('../src/inject-view-names');
+const { buildManifest } = require('../src/manifest');
 
 const exampleDir = path.join(__dirname, '..', 'example');
 const raw = path.join(exampleDir, 'out.js');
@@ -34,9 +35,11 @@ if (debug) args.push('--debug');
 console.log(`$ ${elm} ${args.join(' ')}  (cwd: example)`);
 execFileSync(elm, args, { cwd: exampleDir, stdio: 'inherit' });
 
+const withOverlay = process.argv.includes('--overlay');
 const { code, stats } = transform(fs.readFileSync(raw, 'utf8'), {
   wrap: process.argv.includes('--wrap'),
-  overlay: process.argv.includes('--overlay'),
+  overlay: withOverlay,
+  manifest: withOverlay ? buildManifest(exampleDir) : undefined,
 });
 fs.writeFileSync(tagged, code);
 

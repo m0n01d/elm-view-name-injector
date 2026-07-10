@@ -6,7 +6,8 @@
   "license": "MIT",
   "main": "src/inject-view-names.js",
   "bin": {
-    "inject-view-names": "bin/cli.js"
+    "inject-view-names": "bin/cli.js",
+    "inject-view-manifest": "bin/manifest.js"
   },
   "scripts": {
     "test": "node test/run.js",

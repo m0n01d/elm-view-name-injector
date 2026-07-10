@@ -253,7 +253,11 @@ function transform(code, options = {}) {
   }
 
   if (opts.overlay) {
-    out += '\n;/* elm-view-name overlay */\n' + overlaySource() + '\n';
+    var manifestJs =
+      opts.manifest && typeof opts.manifest === 'object'
+        ? '\n;try{window.__elmViewManifest=' + JSON.stringify(opts.manifest) + '}catch(e){}'
+        : '';
+    out += '\n;/* elm-view-name overlay */' + manifestJs + '\n' + overlaySource() + '\n';
   }
 
   return { code: out, stats };

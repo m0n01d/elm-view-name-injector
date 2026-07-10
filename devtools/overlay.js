@@ -70,6 +70,10 @@
     '.row.sel .fn{color:' + LOCK + '}' +
     '.cnt{opacity:.35;font-size:11px;margin-left:5px}' +
     '.empty{padding:16px 12px;opacity:.6;line-height:1.5}' +
+    '.foot{display:none;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid #263241;background:#0c141d}' +
+    '.foot.on{display:flex}' +
+    '.foot .loc{flex:1;opacity:.7;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}' +
+    '.foot .open[disabled]{opacity:.4;cursor:default}' +
     '</style>' +
     '<div class="dt collapsed">' +
     '  <button class="badge" title="Elm Views — click to open">' + logo(24, ELM_BLUE) + '<span class="bct">0</span></button>' +
@@ -83,6 +87,7 @@
     '    </div>' +
     '    <input class="search" placeholder="filter by name…" />' +
     '    <div class="tree"></div>' +
+    '    <div class="foot"><span class="loc"></span><button class="btn open" title="Open in editor (or double-click a row)">&lt;&gt; source</button></div>' +
     '  </div>' +
     '</div>';
 
@@ -97,8 +102,57 @@
   hlBox.style.display = 'none';
   root.appendChild(hlBox);
 
+  var footEl = $('.foot'), locEl = $('.loc'), openBtn = $('.open');
   var selected = null, inspecting = false, rowByEl = new Map();
   var collapsed = new Set(), collapsibleKeys = [];
+
+  // ---- jump-to-source ----------------------------------------------------
+  // manifest: { "Module.decl": { file, line } }. Embedded by the injector, or
+  // fetched from a served JSON file as a fallback.
+  var manifest = window.__elmViewManifest || null;
+  if (!manifest) {
+    try {
+      fetch(window.__elmViewManifestUrl || '/elm-view-manifest.json')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (m) { if (m) { manifest = m; if (selected) updateFoot(selected); } })
+        .catch(function () {});
+    } catch (e) {}
+  }
+  function entryFor(el) {
+    return manifest ? manifest[el.getAttribute(ATTR)] : null;
+  }
+  function editorUrl(entry) {
+    var tmpl = window.__elmViewEditor || 'vscode://file/{file}:{line}';
+    if (typeof tmpl === 'function') return tmpl(entry.file, entry.line);
+    return tmpl.replace('{file}', entry.file).replace('{line}', String(entry.line));
+  }
+  function openSource(el) {
+    var entry = entryFor(el);
+    if (!entry) { console.warn('[elm-view] no source for ' + el.getAttribute(ATTR)); return; }
+    var a = document.createElement('a');
+    a.href = editorUrl(entry);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+  function shortFile(file) {
+    var parts = file.split(/[\\/]/);
+    return parts.slice(-3).join('/');
+  }
+  function updateFoot(el) {
+    if (!el) { footEl.classList.remove('on'); return; }
+    footEl.classList.add('on');
+    var entry = entryFor(el);
+    if (entry) {
+      locEl.textContent = shortFile(entry.file) + ':' + entry.line;
+      locEl.title = entry.file + ':' + entry.line;
+      openBtn.disabled = false;
+    } else {
+      locEl.textContent = manifest ? 'source not in manifest' : 'no manifest loaded';
+      locEl.title = '';
+      openBtn.disabled = true;
+    }
+  }
 
   // ---- highlight (hover vs locked) --------------------------------------
   function place(el) {
@@ -130,6 +184,7 @@
     row.addEventListener('mouseenter', function () { if (!inspecting) hover(el); });
     row.addEventListener('mouseleave', clearHover);
     row.addEventListener('click', function () { select(el); });
+    row.addEventListener('dblclick', function () { openSource(el); });
     rowByEl.set(el, row);
     if (selected === el) row.classList.add('sel');
   }
@@ -140,7 +195,7 @@
   }
 
   function build() {
-    if (selected && !document.contains(selected)) { selected = null; hlBox.style.display = 'none'; }
+    if (selected && !document.contains(selected)) { selected = null; hlBox.style.display = 'none'; updateFoot(null); }
     var els = [].slice.call(document.querySelectorAll('[' + ATTR + ']'));
     treeEl.innerHTML = '';
     rowByEl = new Map();
@@ -226,6 +281,7 @@
     var row = rowByEl.get(el);
     if (row) { row.classList.add('sel'); row.scrollIntoView({ block: 'nearest' }); }
     lock(el);
+    updateFoot(el);
     try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
     console.log('[elm-view] ' + el.getAttribute(ATTR), el);
   }
@@ -277,6 +333,7 @@
 
   // ---- wiring ------------------------------------------------------------
   inspBtn.addEventListener('click', function () { setInspect(!inspecting); });
+  openBtn.addEventListener('click', function () { if (selected) openSource(selected); });
   $('.ref').addEventListener('click', build);
   $('.tog').addEventListener('click', function () { setCollapsed(true); });
   $('.coll').addEventListener('click', function () {

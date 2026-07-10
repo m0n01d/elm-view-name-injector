@@ -69,6 +69,26 @@ The panel mounts in a shadow DOM on `<html>`, so it survives Elm re-renders
 (even `Browser.application`, which owns `<body>`) and its styling can't leak into
 the app.
 
+#### Jump-to-source
+
+Select a view and the panel footer shows its `file:line`; click **`<> source`**
+(or **double-click** a row) to open it in your editor. This needs a manifest
+(`Module.decl → file:line`) built by scanning the Elm source, since compiled JS
+has no source locations.
+
+```sh
+# embed the manifest (small apps / the example): implies --overlay
+node bin/cli.js out.js -i --manifest /path/to/elm-project
+
+# OR emit it once and serve it (recommended for big apps — no per-reload scan);
+# the overlay fetches /elm-view-manifest.json when nothing is embedded
+node bin/manifest.js /path/to/ui -o /path/to/ui/public/elm-view-manifest.json
+```
+
+Editor scheme defaults to `vscode://file/{file}:{line}`. Override it before the
+bundle loads via `window.__elmViewEditor` (a `"…{file}…{line}…"` template or a
+`(file, line) => url` function), e.g. for Cursor, JetBrains, etc.
+
 ---
 
 ## Why not elm-review / a runtime helper?

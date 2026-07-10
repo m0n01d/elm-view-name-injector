@@ -17,6 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 const { transform } = require('../src/inject-view-names');
+const { buildManifest } = require('../src/manifest');
 
 function parseArgs(argv) {
   const opts = { input: null, output: null, stdin: false, inPlace: false, stats: false, wrap: false };
@@ -44,6 +45,12 @@ function parseArgs(argv) {
         break;
       case '--overlay':
         transformOpts.overlay = true;
+        break;
+      case '--manifest':
+        // build a Module.decl -> file:line manifest from an Elm project dir and
+        // embed it for jump-to-source (implies --overlay)
+        transformOpts.overlay = true;
+        transformOpts.manifest = buildManifest(argv[++i]);
         break;
       case '-o':
       case '--output':
@@ -93,6 +100,7 @@ function printHelp() {
       '      --prefix <str>   app symbol prefix (default: $author$project$)',
       '      --wrap           also tag text/map/lazy via a display:contents div',
       '      --overlay        append the in-page DevTools overlay (experimental)',
+      '      --manifest <dir> embed a source manifest from an Elm project (jump-to-source; implies --overlay)',
       '      --stats          print tag counts to stderr',
       '  -h, --help           show this help',
       '',
