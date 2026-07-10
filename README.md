@@ -38,38 +38,44 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full comparison and codegen notes.
 
 ## How it works
 
-Elm's codegen is boringly regular:
+When Elm compiles your code, every view function turns into very predictable
+JavaScript — and that's what lets us do this without any Elm type information:
 
-- App symbols are `var $author$project$<Module>$<decl> = …` (the `$author$project$`
-  prefix is literal for application code). → demangles to `Module.decl`.
-- Elements are `A2($elm$html$Html$<tag>, attrs, kids)` (attrs = arg 1) or
-  `A3($elm$html$Html$node|Keyed$node, tag, attrs, kids)` (attrs = arg 2).
-- Attributes **and** event handlers share one list, so we just cons onto it.
+- A function like `Main.viewCard` becomes a variable named
+  `$author$project$Main$viewCard`. We read the name straight back out of it.
+- An element like `div [ ...attrs ] [ ...kids ]` becomes a function call whose
+  first list argument is the element's attributes (that list also holds its
+  event handlers).
 
-For every top-level declaration whose rendered root is such an element, we
-replace its attrs argument with:
+So for each view function we find the element it returns and add one item to
+that attribute list — the function's own name:
 
 ```js
-_List_Cons( A2(_VirtualDom_attribute, "elm-view-name", "Module.decl"), <original attrs> )
+// before
+A2($elm$html$Html$div,  [ class "card" ],  kids)
+// after
+A2($elm$html$Html$div,  [ attribute "elm-view-name" "Main.viewCard", class "card" ],  kids)
 ```
 
-`_VirtualDom_attribute` and `_List_Cons` are **kernel** helpers — always present
-in any Html app, immune to tree-shaking (using `$elm$html$Html$Attributes$attribute`
-would dangle in apps that never call it in source — a real bug this avoids).
+Why it stays safe:
 
-**Composition needs zero special handling.** Each declaration tags only its own
-root element; child-view *calls* appear verbatim in parents' children and
-self-tag at runtime, so the nested `elm-view-name` DOM tree emerges for free.
+- The attribute is added with `_VirtualDom_attribute`, a built-in Elm helper
+  that's always in the bundle — so the injected code can never point at
+  something the compiler stripped out.
+- **Nesting is free.** Each function only tags its own element. When one view
+  calls another, that call already sits inside the parent's output, so the child
+  tags itself — you get the whole nested tree automatically.
+- **Anything that isn't a single element is skipped** (plain `text`, `Html.map`,
+  lazy, or a function that just returns another view). Tagging nothing is better
+  than tagging the wrong thing.
 
-Values whose root isn't an element (`text`, `Html.map`, `Html.Lazy.lazy`,
-delegation, records, `List (Html msg)`) are left untagged — safe by default.
-`--wrap` optionally tags the stdlib-opaque forms (`text`/`map`/`lazy`) via a
-layout-neutral `display:contents` div.
+`--wrap` optionally tags the skipped `text`/`map`/`lazy` cases too, by wrapping
+them in a layout-neutral `display:contents` div.
 
 ## Install
 
 ```sh
-npm install    # @babel/parser, @babel/traverse, @babel/types, recast
+npm install    # @babel/parser, @babel/traverse, @babel/types
 ```
 
 ## Usage
