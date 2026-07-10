@@ -72,6 +72,33 @@ document.querySelectorAll('[elm-view-name]')
 $0.getAttribute('elm-view-name')   // pick an element, see which fn rendered it
 ```
 
+## Tagging `text` / `map` / `lazy` too (`wrap`)
+
+Views that return opaque Html — `text "…"`, `Html.map`, `Html.Lazy.lazy` — have
+no attribute list to splice into, so they're **skipped** by default (they render
+untagged and don't appear in the overlay tree). To tag them anyway, pass `wrap`,
+which wraps each in a layout-neutral `display:contents` div carrying the name.
+
+There's no `--wrap` flag in this flow (that's for the standalone CLI). Instead
+gate it behind an env var in the postprocess — it adds a DOM node, which can
+affect child-combinator CSS (`.parent > .child`, `:first-child`, `+`/`~`), so
+it's worth opting in deliberately:
+
+```js
+return viewNames.transform(code, {
+  overlay: true,
+  manifest,
+  wrap: process.env.ELM_VIEW_WRAP === "1",
+}).code;
+```
+
+```sh
+ELM_VIEW_WRAP=1 npm start   # overlay + wrap; plain `npm start` = overlay only
+```
+
+Restart to toggle it (env is read at startup). If a page looks off with wrap on,
+drop back to plain `npm start`.
+
 ## Notes
 
 - **Production-safe.** Skipped in `optimize` mode, so production builds are never
