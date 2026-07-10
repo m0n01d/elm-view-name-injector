@@ -211,7 +211,7 @@
       });
     }
     renderList(roots, treeEl, 0, '');
-    if (selected) lock(selected);
+    if (selected && isOpen()) lock(selected);
   }
 
   function depthAncestors(el) {
@@ -256,7 +256,17 @@
   }
 
   // ---- collapse / position ----------------------------------------------
-  function setCollapsed(on) { dt.classList.toggle('collapsed', on); clampIntoView(); }
+  function isOpen() { return !dt.classList.contains('collapsed'); }
+  function setCollapsed(on) {
+    dt.classList.toggle('collapsed', on);
+    if (on) {
+      hlBox.style.display = 'none'; // closed panel → no DOM highlight
+      if (inspecting) setInspect(false);
+    } else if (selected) {
+      lock(selected); // reopened → restore the pinned highlight
+    }
+    clampIntoView();
+  }
   function clampIntoView() {
     var r = dt.getBoundingClientRect();
     var left = Math.min(parseFloat(dt.style.left) || r.left, window.innerWidth - r.width - 8);
@@ -291,7 +301,7 @@
     var w = dt.offsetWidth, h = dt.offsetHeight;
     dt.style.left = Math.min(Math.max(0, e.clientX - drag.dx), Math.max(0, window.innerWidth - w)) + 'px';
     dt.style.top = Math.min(Math.max(0, e.clientY - drag.dy), Math.max(0, window.innerHeight - h)) + 'px';
-    if (selected) lock(selected);
+    if (selected && isOpen()) lock(selected);
   });
   window.addEventListener('mouseup', function () {
     if (!drag) return;
@@ -300,8 +310,8 @@
     if (wasClick) setCollapsed(!dt.classList.contains('collapsed'));
   });
 
-  window.addEventListener('scroll', function () { if (selected) lock(selected); }, true);
-  window.addEventListener('resize', function () { if (selected) lock(selected); clampIntoView(); });
+  window.addEventListener('scroll', function () { if (selected && isOpen()) lock(selected); }, true);
+  window.addEventListener('resize', function () { if (selected && isOpen()) lock(selected); clampIntoView(); });
 
   var t = null;
   new MutationObserver(function () {
