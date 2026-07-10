@@ -19,6 +19,31 @@ compiled JS.
 > `--debug`** modes. Intended as a **dev/QA build-time tool**, not for
 > production bundles.
 
+## ⚠️ Experimental — how we run it today
+
+Still early, so it's off by default and gated behind an env var. Nothing happens
+unless you opt in, and production builds are never touched.
+
+In the ui repo (after wiring the one-time postprocess hook — see
+[integrations/elm-watch-postprocess.md](integrations/elm-watch-postprocess.md)):
+
+```sh
+ELM_VIEW_NAMES=1 npm start      # turn it on for this dev session
+```
+
+Then open the app, flip the target to **Debug** in the elm-watch overlay, and
+inspect `[elm-view-name]` in DevTools.
+
+- **No env var = off.** Normal `npm start` and `npm run build` behave exactly as
+  before.
+- **Restart after changing the flag** — the dev server reads it at startup.
+- **Big apps cost a few seconds per hot reload** (Client/Config), since it
+  re-parses the whole bundle. Flip the flag off when you're not inspecting.
+
+Since it's experimental, expect rough edges — if a page renders blank or the
+console fills with errors, turn the flag off and let us know what you were
+looking at.
+
 ---
 
 ## Why not elm-review / a runtime helper?
