@@ -253,10 +253,17 @@ function transform(code, options = {}) {
   }
 
   if (opts.overlay) {
-    var manifestJs =
-      opts.manifest && typeof opts.manifest === 'object'
-        ? '\n;try{window.__elmViewManifest=' + JSON.stringify(opts.manifest) + '}catch(e){}'
-        : '';
+    var manifestJs = '';
+    if (opts.manifest && typeof opts.manifest === 'object') {
+      // embed only the entries for views actually tagged in THIS bundle, so a
+      // whole-project manifest doesn't bloat every target's output
+      var subset = {};
+      for (var i = 0; i < stats.tagged.length; i++) {
+        var qn = stats.tagged[i];
+        if (opts.manifest[qn]) subset[qn] = opts.manifest[qn];
+      }
+      manifestJs = '\n;try{window.__elmViewManifest=' + JSON.stringify(subset) + '}catch(e){}';
+    }
     out += '\n;/* elm-view-name overlay */' + manifestJs + '\n' + overlaySource() + '\n';
   }
 

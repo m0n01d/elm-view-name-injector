@@ -76,13 +76,18 @@ Select a view and the panel footer shows its `file:line`; click **`<> source`**
 (`Module.decl → file:line`) built by scanning the Elm source, since compiled JS
 has no source locations.
 
+With the [elm-watch postprocess hook](integrations/elm-watch-postprocess.md)
+this is **automatic** — the manifest is rebuilt and embedded on every compile
+(scanning ~1.7k files is ~0.6s, and only the tagged views' entries are embedded).
+For one-off / standalone use:
+
 ```sh
-# embed the manifest (small apps / the example): implies --overlay
+# embed the manifest directly: implies --overlay
 node bin/cli.js out.js -i --manifest /path/to/elm-project
 
-# OR emit it once and serve it (recommended for big apps — no per-reload scan);
-# the overlay fetches /elm-view-manifest.json when nothing is embedded
-node bin/manifest.js /path/to/ui -o /path/to/ui/public/elm-view-manifest.json
+# OR emit it once and serve it; the overlay fetches /elm-view-manifest.json
+# (with no-store) when nothing is embedded
+node bin/manifest.js /path/to/project -o /path/to/project/public/elm-view-manifest.json
 ```
 
 Pick your editor from the footer's **"Open in…"** dropdown — VS Code (+ Insiders),

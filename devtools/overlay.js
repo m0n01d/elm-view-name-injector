@@ -113,7 +113,7 @@
   var manifest = window.__elmViewManifest || null;
   if (!manifest) {
     try {
-      fetch(window.__elmViewManifestUrl || '/elm-view-manifest.json')
+      fetch(window.__elmViewManifestUrl || '/elm-view-manifest.json', { cache: 'no-store' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (m) { if (m) { manifest = m; if (selected) updateFoot(selected); } })
         .catch(function () {});

@@ -22,17 +22,24 @@ Near the top, require the sibling injector (safe if it's missing):
 
 ```js
 import { createRequire } from "module";
+import { fileURLToPath } from "url";
+import path from "path";
 const require = createRequire(import.meta.url);
 
-// Tags view fns + appends the in-page overlay in dev/debug builds — always on.
-// No-ops if the sibling repo isn't cloned; skipped in optimize (see below), so
-// production is unaffected.
+// Tags view fns, embeds a fresh source manifest (jump-to-source), and appends
+// the in-page overlay in dev/debug builds — always on. No-ops if the sibling
+// repo isn't cloned; skipped in optimize (see below), so production is untouched.
 let viewNames = null;
+let buildManifest = null;
 try {
   viewNames = require("../../elm-view-name-injector/src/inject-view-names.js");
+  buildManifest = require("../../elm-view-name-injector/src/manifest.js").buildManifest;
 } catch (e) {
   // sibling repo not present — dev build proceeds without the overlay
 }
+
+// this repo's root (…/scripts/elm-watch-postprocess.mjs -> …/)
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 ```
 
 Then in your `postprocess`, run it for non-`optimize` builds:
@@ -42,7 +49,11 @@ const postprocess = async ({ code, compilationMode }) => {
   if (compilationMode === "optimize") {
     return code; // (or your minifier) — production untouched
   }
-  return viewNames ? viewNames.transform(code, { overlay: true }).code : code;
+  if (!viewNames) return code;
+  // rebuild the manifest each compile so jump-to-source line numbers stay accurate;
+  // transform() embeds only the entries for views tagged in this bundle
+  const manifest = buildManifest ? buildManifest(projectRoot) : undefined;
+  return viewNames.transform(code, { overlay: true, manifest }).code;
 };
 ```
 
@@ -69,8 +80,10 @@ $0.getAttribute('elm-view-name')   // pick an element, see which fn rendered it
   extra seconds per hot recompile. If that's too much, scope it to the target
   you're working on, or gate it behind an env var.
 - **Prereq.** `cd ../elm-view-name-injector && npm install` once (Babel deps).
-- **Jump-to-source.** Generate a manifest so the overlay can open files:
+- **Jump-to-source is automatic** with the snippet above — the manifest is rebuilt
+  and embedded on every compile. (Alternative: skip the `manifest` option and
+  serve a generated file instead —
   `node ../elm-view-name-injector/bin/manifest.js . -o public/elm-view-manifest.json`
-  (the overlay fetches `/elm-view-manifest.json` when nothing is embedded).
+  — the overlay fetches `/elm-view-manifest.json` when nothing is embedded.)
 - **No diff pollution.** elm-watch's compiled output is typically gitignored, so
   only this one script file changes.
