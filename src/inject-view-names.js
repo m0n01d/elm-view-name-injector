@@ -38,7 +38,11 @@ const DEFAULTS = {
   wrap: false,
   overlay: false, // append the in-page DevTools overlay runtime (experimental)
   capture: false, // record view fn call-args for inspection (experimental; needs _Debug_toString)
+  lazy: false, // instrument Html.Lazy.lazy* to count hits/misses (experimental)
 };
+
+// A2($elm$html$Html$Lazy$lazy, …) / lazy2 … lazy8 (and the VirtualDom aliases)
+const LAZY_RE = /^\$elm\$(?:html\$Html\$Lazy|virtual_dom\$VirtualDom)\$lazy([2-8])?$/;
 
 let _overlaySrc = null;
 function overlaySource() {
@@ -225,6 +229,29 @@ function captureRuntime() {
   );
 }
 
+// Runtime for Html.Lazy instrumentation: __lz(key, n) returns a lazy fn of arity
+// n that delegates to the real _VirtualDom_lazy* (memo refs untouched), counting
+// each encounter and wrapping the thunk's `m` (forced only on a miss) to count
+// misses. typeof guards skip lazy variants a bundle didn't include.
+function lazyRuntime() {
+  return (
+    ';(function(){if(typeof window!=="undefined")window.__elmLazyStats=window.__elmLazyStats||{}})();' +
+    'var __lzReal={' +
+    '2:typeof _VirtualDom_lazy!=="undefined"?_VirtualDom_lazy:null,' +
+    '3:typeof _VirtualDom_lazy2!=="undefined"?_VirtualDom_lazy2:null,' +
+    '4:typeof _VirtualDom_lazy3!=="undefined"?_VirtualDom_lazy3:null,' +
+    '5:typeof _VirtualDom_lazy4!=="undefined"?_VirtualDom_lazy4:null,' +
+    '6:typeof _VirtualDom_lazy5!=="undefined"?_VirtualDom_lazy5:null,' +
+    '7:typeof _VirtualDom_lazy6!=="undefined"?_VirtualDom_lazy6:null,' +
+    '8:typeof _VirtualDom_lazy7!=="undefined"?_VirtualDom_lazy7:null,' +
+    '9:typeof _VirtualDom_lazy8!=="undefined"?_VirtualDom_lazy8:null};' +
+    'function __lz(key,n){var real=__lzReal[n];if(!real)return function(){return null};' +
+    'var rec=(window.__elmLazyStats[key]=window.__elmLazyStats[key]||{enc:0,miss:0});' +
+    'return {a:n,f:function(){var node=real.f.apply(null,arguments);rec.enc++;' +
+    'var m=node.m;node.m=function(){rec.miss++;return m()};return node}}}\n'
+  );
+}
+
 function transform(code, options = {}) {
   const opts = { ...DEFAULTS, ...options };
   const stats = { spliced: 0, wrapped: 0, skipped: 0, tagged: [] };
@@ -283,13 +310,46 @@ function transform(code, options = {}) {
         stats.captured = (stats.captured || 0) + 1;
       }
     },
+
+    // Html.Lazy instrumentation: swap the lazy fn for a keyed counter wrapper,
+    // leaving the memo args untouched.
+    CallExpression(path) {
+      if (!opts.lazy) return;
+      const n = path.node;
+      if (!t.isIdentifier(n.callee) || !/^A[2-9]$/.test(n.callee.name)) return;
+      const arity = Number(n.callee.name.slice(1));
+      const lazyFn = n.arguments[0];
+      if (!t.isIdentifier(lazyFn)) return;
+      const mm = LAZY_RE.exec(lazyFn.name);
+      if (!mm) return;
+      // lazy=A2, lazy2=A3, … lazyK=A(K+1). Skip partial applications (arity < full).
+      if (arity !== (mm[1] ? Number(mm[1]) + 1 : 2)) return;
+      // key: the memoized fn (arg 1) if named, else the enclosing declaration
+      const memo = n.arguments[1];
+      let key;
+      if (memo && t.isIdentifier(memo) && memo.name.startsWith(opts.prefix)) {
+        key = demangle(memo.name, opts.prefix);
+      } else {
+        // fall back to the enclosing app declaration; skip library/debugger lazies
+        const dp = path.findParent(
+          (p) => p.isVariableDeclarator() && t.isIdentifier(p.node.id) && p.node.id.name.startsWith(opts.prefix)
+        );
+        if (!dp) return;
+        key = demangle(dp.node.id.name, opts.prefix) + '/lazy';
+      }
+      edits.push({ start: lazyFn.start, end: lazyFn.end, text: `__lz(${jsStr(key)}, ${arity})` });
+      stats.lazy = (stats.lazy || 0) + 1;
+    },
   });
 
-  // inject the capture runtime once, before the first app declaration (where
-  // _Debug_toString is already in scope)
-  if (opts.capture && stats.spliced + stats.wrapped > 0) {
+  // inject runtime(s) once, before the first app declaration (kernel helpers +
+  // _Debug_toString are in scope there)
+  let runtime = '';
+  if (opts.capture && stats.spliced + stats.wrapped > 0) runtime += captureRuntime();
+  if (opts.lazy && (stats.lazy || 0) > 0) runtime += lazyRuntime();
+  if (runtime) {
     const at = code.indexOf('var ' + opts.prefix);
-    if (at !== -1) edits.push({ start: at, end: at, text: captureRuntime() });
+    if (at !== -1) edits.push({ start: at, end: at, text: runtime });
   }
 
   // Apply edits back-to-front so earlier offsets stay valid. Edits target

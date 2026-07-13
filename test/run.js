@@ -175,6 +175,22 @@ check('capture output still valid JS', () =>
   babelParser.parse(cap.code, { sourceType: 'script' })
 );
 
+console.log('\n--lazy mode (hit/miss instrumentation)');
+const lz = transform(fixture, { overlay: true, lazy: true });
+check('injects the lazy runtime (__lz + __lzReal)', () =>
+  assert.ok(/function __lz\(key,n\)/.test(lz.code) && /__lzReal/.test(lz.code), 'runtime missing')
+);
+check('keys a lazy by its memoized fn (lazy viewA1 → Main.viewA1)', () =>
+  assert.ok(lz.code.includes('__lz("Main.viewA1"'), 'memo-fn key missing')
+);
+check('keys an inline-lambda lazy by the enclosing decl', () =>
+  assert.ok(lz.code.includes('__lz("Main.viewLazyBroken/lazy"'), 'fallback key missing')
+);
+check('does NOT rewrite a partially-applied lazy2 (arity mismatch)', () =>
+  assert.ok(lz.code.includes('$elm$html$Html$Lazy$lazy2'), 'partial lazy2 was rewritten')
+);
+check('lazy output still valid JS', () => babelParser.parse(lz.code, { sourceType: 'script' }));
+
 console.log('');
 if (failures) {
   console.error(`FAILED: ${failures} check(s)`);

@@ -135,6 +135,23 @@ viewLazy model =
     Lazy.lazy viewA1 model
 
 
+stableChild : String -> Html Msg
+stableChild s =
+    div [ class "stable" ] [ text ("stable: " ++ s) ]
+
+
+{-| lazy memoized on a field that never changes (name) -> hits after mount. -}
+viewLazyStable : Model -> Html Msg
+viewLazyStable model =
+    Lazy.lazy stableChild model.name
+
+
+{-| lazy with an inline lambda -> new fn ref every render -> always misses. -}
+viewLazyBroken : Model -> Html Msg
+viewLazyBroken model =
+    Lazy.lazy (\_ -> viewA1 model) ()
+
+
 viewKeyed : Model -> Html Msg
 viewKeyed model =
     Keyed.node "ul"
@@ -267,6 +284,8 @@ view model =
         , viewPipeText model
         , viewMap model
         , viewLazy model
+        , viewLazyStable model
+        , viewLazyBroken model
         , viewKeyed model
         , viewCustomNode
         , customTag [ text "partial node" ]

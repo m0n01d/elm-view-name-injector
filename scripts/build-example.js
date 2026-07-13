@@ -40,6 +40,7 @@ const { code, stats } = transform(fs.readFileSync(raw, 'utf8'), {
   wrap: process.argv.includes('--wrap'),
   overlay: withOverlay,
   capture: process.argv.includes('--capture'),
+  lazy: process.argv.includes('--lazy'),
   manifest: withOverlay ? buildManifest(exampleDir) : undefined,
 });
 fs.writeFileSync(tagged, code);
