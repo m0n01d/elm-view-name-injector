@@ -46,6 +46,11 @@ function parseArgs(argv) {
       case '--overlay':
         transformOpts.overlay = true;
         break;
+      case '--capture':
+        // record view-fn call args for inspection (implies --overlay)
+        transformOpts.overlay = true;
+        transformOpts.capture = true;
+        break;
       case '--manifest':
         // build a Module.decl -> file:line manifest from an Elm project dir and
         // embed it for jump-to-source (implies --overlay)
@@ -100,6 +105,7 @@ function printHelp() {
       '      --prefix <str>   app symbol prefix (default: $author$project$)',
       '      --wrap           also tag text/map/lazy via a display:contents div',
       '      --overlay        append the in-page DevTools overlay (experimental)',
+      '      --capture        record view-fn args for inspection (implies --overlay; needs dev/--debug)',
       '      --manifest <dir> embed a source manifest from an Elm project (jump-to-source; implies --overlay)',
       '      --stats          print tag counts to stderr',
       '  -h, --help           show this help',

@@ -37,6 +37,7 @@ const DEFAULTS = {
   attr: 'elm-view-name',
   wrap: false,
   overlay: false, // append the in-page DevTools overlay runtime (experimental)
+  capture: false, // record view fn call-args for inspection (experimental; needs _Debug_toString)
 };
 
 let _overlaySrc = null;
@@ -196,6 +197,34 @@ function attrExpr(qname, attrName) {
   return `A2(${ATTR_HELPER}, ${jsStr(attrName)}, ${jsStr(qname)})`;
 }
 
+// A declaration's init is "function-valued" (has args worth capturing) if it's a
+// bare function (arity 1) or an F<n>(…) wrapper (arity ≥ 2). Bare Html values
+// (arity-0 views) are CallExpressions to A2/A3, which don't match.
+function isFunctionValued(node) {
+  return (
+    t.isFunctionExpression(node) ||
+    t.isArrowFunctionExpression(node) ||
+    (t.isCallExpression(node) && t.isIdentifier(node.callee) && /^F\d+$/.test(node.callee.name))
+  );
+}
+
+// Runtime injected once (inside the IIFE, where _Debug_toString is in scope):
+// exposes captured args + the stringifier on window, and defines __elmViewCap,
+// which wraps a view fn value to record its call args (last call wins).
+function captureRuntime() {
+  return (
+    ';(function(){if(typeof window==="undefined")return;' +
+    'window.__elmViewArgs=window.__elmViewArgs||{};' +
+    'try{window.__elmViewToString=_Debug_toString}catch(e){}})();' +
+    'function __elmViewCap(name,orig){' +
+    'if(orig&&typeof orig.a==="number"&&typeof orig.f==="function"){' +
+    'var raw=orig.f;orig.f=function(){window.__elmViewArgs[name]=[].slice.call(arguments);' +
+    'return raw.apply(null,arguments)};return orig}' +
+    'if(typeof orig==="function"){return function(a){window.__elmViewArgs[name]=[a];return orig(a)}}' +
+    'return orig}\n'
+  );
+}
+
 function transform(code, options = {}) {
   const opts = { ...DEFAULTS, ...options };
   const stats = { spliced: 0, wrapped: 0, skipped: 0, tagged: [] };
@@ -211,6 +240,7 @@ function transform(code, options = {}) {
       const qname = demangle(id.name, opts.prefix);
       if (!qname) return;
 
+      let taggedThis = false;
       for (const exprPath of collectPositions(path.get('init'))) {
         const node = exprPath.node;
         const el = classifyElement(node);
@@ -225,6 +255,7 @@ function transform(code, options = {}) {
           });
           stats.spliced++;
           stats.tagged.push(qname);
+          taggedThis = true;
         } else if (opts.wrap && isOpaqueHtml(node)) {
           const orig = code.slice(node.start, node.end);
           const contents = `A2(${ATTR_HELPER}, "style", "display:contents")`;
@@ -236,12 +267,30 @@ function transform(code, options = {}) {
           });
           stats.wrapped++;
           stats.tagged.push(qname + ' (wrapped)');
+          taggedThis = true;
         } else {
           stats.skipped++;
         }
       }
+
+      // capture args: wrap the (function-valued) declaration so each call records
+      // its arguments. Zero-width insertions around init, so they compose with
+      // the attr splice(s) inside it.
+      if (opts.capture && taggedThis && isFunctionValued(path.node.init)) {
+        const init = path.node.init;
+        edits.push({ start: init.start, end: init.start, text: `__elmViewCap(${jsStr(qname)}, ` });
+        edits.push({ start: init.end, end: init.end, text: ')' });
+        stats.captured = (stats.captured || 0) + 1;
+      }
     },
   });
+
+  // inject the capture runtime once, before the first app declaration (where
+  // _Debug_toString is already in scope)
+  if (opts.capture && stats.spliced + stats.wrapped > 0) {
+    const at = code.indexOf('var ' + opts.prefix);
+    if (at !== -1) edits.push({ start: at, end: at, text: captureRuntime() });
+  }
 
   // Apply edits back-to-front so earlier offsets stay valid. Edits target
   // disjoint sub-ranges (attr lists / opaque leaves), so ordering by start is

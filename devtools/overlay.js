@@ -74,6 +74,13 @@
     '.foot.on{display:flex}' +
     '.foot .loc{flex:1;opacity:.7;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}' +
     '.foot .ide{background:#1c2836;color:#d7e0ea;border:1px solid #2d3c4d;border-radius:5px;padding:2px 4px;font-size:11px;max-width:120px}' +
+    '.args{display:none;border-top:1px solid #263241;background:#0c141d;max-height:200px;overflow:auto;padding:6px 10px}' +
+    '.args.on{display:block}' +
+    '.args .ahd{display:flex;align-items:center;gap:6px;font-weight:700;margin-bottom:4px}' +
+    '.args .ahd .nw{margin-left:auto;font-size:10px;color:#04223a;background:' + ACCENT + ';padding:1px 6px;border-radius:3px}' +
+    '.args .albl{margin:6px 0 2px}.args .an{color:' + ACCENT + '}.args .aty{opacity:.5}' +
+    '.args pre{margin:0;padding:6px 8px;background:#0a1118;border:1px solid #223;border-radius:5px;white-space:pre-wrap;word-break:break-word;line-height:1.5;color:#c8d3de;font-size:11px}' +
+    '.args .ahint{opacity:.55;font-size:11px}' +
     '.foot .open[disabled]{opacity:.4;cursor:default}' +
     '</style>' +
     '<div class="dt collapsed">' +
@@ -88,6 +95,7 @@
     '    </div>' +
     '    <input class="search" placeholder="filter by name…" />' +
     '    <div class="tree"></div>' +
+    '    <div class="args"></div>' +
     '    <div class="foot"><span class="loc"></span><select class="ide" title="Open in…"></select><button class="btn open" title="Open in editor (or double-click a row)">&lt;&gt; source</button></div>' +
     '  </div>' +
     '</div>';
@@ -103,7 +111,7 @@
   hlBox.style.display = 'none';
   root.appendChild(hlBox);
 
-  var footEl = $('.foot'), locEl = $('.loc'), openBtn = $('.open'), ideEl = $('.ide');
+  var footEl = $('.foot'), locEl = $('.loc'), openBtn = $('.open'), ideEl = $('.ide'), argsEl = $('.args');
   var selected = null, inspecting = false, rowByEl = new Map();
   var collapsed = new Set(), collapsibleKeys = [];
 
@@ -178,6 +186,45 @@
       locEl.title = '';
       openBtn.disabled = true;
     }
+  }
+
+  // ---- args inspection ---------------------------------------------------
+  function hint(msg) {
+    var d = document.createElement('div');
+    d.className = 'ahint';
+    d.textContent = msg;
+    argsEl.appendChild(d);
+  }
+  function renderArgs(el) {
+    argsEl.innerHTML = '';
+    argsEl.classList.remove('on');
+    if (!el) return;
+    var name = el.getAttribute(ATTR);
+    var reg = window.__elmViewArgs;
+    if (!reg) return; // capture not enabled in this build → no Args section
+    argsEl.classList.add('on');
+    var hd = document.createElement('div');
+    hd.className = 'ahd';
+    hd.innerHTML = '<span>Args</span><span class="nw">live</span>';
+    argsEl.appendChild(hd);
+
+    var toStr = window.__elmViewToString;
+    if (!toStr) return hint('values need a dev/--debug build');
+    var args = reg[name];
+    if (!args || !args.length) return hint('no args captured (0-arg view, or not rendered yet)');
+
+    args.forEach(function (v, i) {
+      var lbl = document.createElement('div');
+      lbl.className = 'albl';
+      lbl.innerHTML = '<span class="an">arg ' + i + '</span>';
+      argsEl.appendChild(lbl);
+      var pre = document.createElement('pre');
+      var s;
+      try { s = toStr(v); } catch (e) { s = '<' + ((e && e.message) || 'error') + '>'; }
+      if (s.length > 2000) s = s.slice(0, 2000) + ' …';
+      pre.textContent = s;
+      argsEl.appendChild(pre);
+    });
   }
 
   // ---- highlight (hover vs locked) --------------------------------------
@@ -306,6 +353,7 @@
     root.querySelectorAll('.row.sel').forEach(function (r) { r.classList.remove('sel'); });
     hlBox.style.display = 'none';
     updateFoot(null);
+    renderArgs(null);
   }
 
   function select(el) {
@@ -315,6 +363,7 @@
     if (row) { row.classList.add('sel'); row.scrollIntoView({ block: 'nearest' }); }
     lock(el);
     updateFoot(el);
+    renderArgs(el);
     try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
     console.log('[elm-view] ' + el.getAttribute(ATTR), el);
   }

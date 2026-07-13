@@ -39,6 +39,7 @@ const withOverlay = process.argv.includes('--overlay');
 const { code, stats } = transform(fs.readFileSync(raw, 'utf8'), {
   wrap: process.argv.includes('--wrap'),
   overlay: withOverlay,
+  capture: process.argv.includes('--capture'),
   manifest: withOverlay ? buildManifest(exampleDir) : undefined,
 });
 fs.writeFileSync(tagged, code);

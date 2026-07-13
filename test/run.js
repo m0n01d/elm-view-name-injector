@@ -159,6 +159,22 @@ check('wrapped output still valid JS', () =>
   babelParser.parse(wrapped.code, { sourceType: 'script' })
 );
 
+console.log('\n--capture mode (inspect args)');
+const cap = transform(fixture, { overlay: true, capture: true });
+check('injects the capture runtime (__elmViewCap + _Debug_toString bridge)', () => {
+  assert.ok(/function __elmViewCap/.test(cap.code), 'runtime missing');
+  assert.ok(/window\.__elmViewToString\s*=\s*_Debug_toString/.test(cap.code), 'stringifier bridge missing');
+});
+check('wraps a function-valued view (Main.viewA1)', () =>
+  assert.ok(cap.code.includes('__elmViewCap("Main.viewA1"'), 'viewA1 not wrapped')
+);
+check('does NOT wrap a bare-value view (Main.viewA0, arity 0)', () =>
+  assert.ok(!cap.code.includes('__elmViewCap("Main.viewA0"'), 'arity-0 view wrongly wrapped')
+);
+check('capture output still valid JS', () =>
+  babelParser.parse(cap.code, { sourceType: 'script' })
+);
+
 console.log('');
 if (failures) {
   console.error(`FAILED: ${failures} check(s)`);
