@@ -52,7 +52,17 @@ function indexFile(file, mod, manifest) {
     const m = /^([a-z][A-Za-z0-9_]*)\b/.exec(lines[i]);
     if (!m || KW.has(m[1]) || seen.has(m[1])) continue;
     seen.add(m[1]);
-    manifest[mod + '.' + m[1]] = { file: file, line: i + 1 };
+    const name = m[1];
+    const entry = { file: file, line: i + 1 };
+    // type signature: if the first column-0 occurrence is an annotation `name :`,
+    // capture it (it may wrap across following indented lines)
+    const anno = new RegExp('^' + name + '\\s*:(.*)').exec(lines[i]);
+    if (anno) {
+      let sig = anno[1];
+      for (let j = i + 1; j < lines.length && /^\s+\S/.test(lines[j]); j++) sig += ' ' + lines[j];
+      entry.sig = sig.replace(/\s+/g, ' ').trim();
+    }
+    manifest[mod + '.' + name] = entry;
   }
 }
 

@@ -78,6 +78,7 @@
     '.args.on{display:block}' +
     '.args .ahd{display:flex;align-items:center;gap:6px;font-weight:700;margin-bottom:4px}' +
     '.args .ahd .nw{margin-left:auto;font-size:10px;color:#04223a;background:' + ACCENT + ';padding:1px 6px;border-radius:3px}' +
+    '.args .asig{opacity:.6;margin-bottom:6px;line-height:1.4;word-break:break-word}' +
     '.args .albl{margin:6px 0 2px}.args .an{color:' + ACCENT + '}.args .aty{opacity:.5}' +
     '.args pre{margin:0;padding:6px 8px;background:#0a1118;border:1px solid #223;border-radius:5px;white-space:pre-wrap;word-break:break-word;line-height:1.5;color:#c8d3de;font-size:11px}' +
     '.args .ahint{opacity:.55;font-size:11px}' +
@@ -195,6 +196,20 @@
     d.textContent = msg;
     argsEl.appendChild(d);
   }
+  // split a type signature on top-level "->" (ignoring nested (), [], {})
+  function splitArrows(sig) {
+    var parts = [], depth = 0, cur = '';
+    for (var i = 0; i < sig.length; i++) {
+      var c = sig[i];
+      if (c === '(' || c === '[' || c === '{') depth++;
+      else if (c === ')' || c === ']' || c === '}') depth--;
+      if (depth === 0 && c === '-' && sig[i + 1] === '>') { parts.push(cur.trim()); cur = ''; i++; continue; }
+      cur += c;
+    }
+    parts.push(cur.trim());
+    return parts;
+  }
+
   function renderArgs(el) {
     argsEl.innerHTML = '';
     argsEl.classList.remove('on');
@@ -208,15 +223,35 @@
     hd.innerHTML = '<span>Args</span><span class="nw">live</span>';
     argsEl.appendChild(hd);
 
+    // type signature (what the view expects) from the manifest
+    var entry = manifest && manifest[name];
+    var sig = entry && entry.sig;
+    if (sig) {
+      var sd = document.createElement('div');
+      sd.className = 'asig';
+      sd.textContent = name.slice(name.lastIndexOf('.') + 1) + ' : ' + sig;
+      argsEl.appendChild(sd);
+    }
+
     var toStr = window.__elmViewToString;
     if (!toStr) return hint('values need a dev/--debug build');
     var args = reg[name];
     if (!args || !args.length) return hint('no args captured (0-arg view, or not rendered yet)');
 
+    var argTypes = sig ? splitArrows(sig).slice(0, -1) : [];
     args.forEach(function (v, i) {
       var lbl = document.createElement('div');
       lbl.className = 'albl';
-      lbl.innerHTML = '<span class="an">arg ' + i + '</span>';
+      var an = document.createElement('span');
+      an.className = 'an';
+      an.textContent = 'arg ' + i;
+      lbl.appendChild(an);
+      if (argTypes[i]) {
+        var ty = document.createElement('span');
+        ty.className = 'aty';
+        ty.textContent = ' : ' + argTypes[i];
+        lbl.appendChild(ty);
+      }
       argsEl.appendChild(lbl);
       var pre = document.createElement('pre');
       var s;
