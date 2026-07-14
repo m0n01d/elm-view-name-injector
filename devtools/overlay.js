@@ -42,9 +42,9 @@
   (document.documentElement || document.body).appendChild(host);
   var root = host.attachShadow({ mode: 'open' });
 
-  root.innerHTML =
-    '<style>' +
+  var CSS =
     ':host{all:initial}' +
+    'body{margin:0;background:#0f1720}' +
     '*{box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}' +
     '.hl{position:fixed;pointer-events:none;z-index:1;border:1px solid ' + ACCENT + ';background:rgba(124,197,255,.15);border-radius:2px;transition:all .05s}' +
     '.hl .tag{position:absolute;top:-18px;left:0;background:' + ACCENT + ';color:#04223a;font-size:11px;font-weight:600;padding:1px 5px;border-radius:3px;white-space:nowrap}' +
@@ -95,7 +95,17 @@
     '.foot .loc{flex:1;opacity:.7;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}' +
     '.foot .ide{background:#1c2836;color:#d7e0ea;border:1px solid #2d3c4d;border-radius:5px;padding:2px 4px;font-size:11px;max-width:120px}' +
     '.foot .open[disabled]{opacity:.4;cursor:default}' +
-    '</style>' +
+    // popout mode — the panel fills its own OS window; no in-page chrome
+    '.dt.popped{position:static}' +
+    '.dt.popped .badge{display:none!important}' +
+    '.dt.popped .tog{display:none}' +
+    '.dt.popped .panel{position:static;display:flex;width:100%;height:100vh;max-height:none;min-width:0;border:0;border-radius:0;box-shadow:none;resize:none}' +
+    // in-page marker shown while popped out (sibling of .dt, so it never moves)
+    '.pobadge{position:fixed;top:16px;right:16px;z-index:3;display:none;align-items:center;gap:7px;pointer-events:auto;background:' + ELM_BLUE + ';color:#fff;border:none;border-radius:7px;padding:7px 11px;box-shadow:0 3px 14px rgba(0,0,0,.4);cursor:pointer;font-weight:700;font-size:13px}' +
+    '.pobadge:hover{filter:brightness(1.06)}' +
+    '';
+
+  var MARKUP =
     '<div class="dt collapsed">' +
     '  <button class="badge" title="Elm Views — click to open">' + logo(24, ELM_BLUE) + '<span class="bct">0</span></button>' +
     '  <div class="panel">' +
@@ -103,6 +113,7 @@
     '      <span class="ttl">Elm Views</span>' +
     '      <button class="btn insp" title="Inspect: click an element on the page">🎯</button>' +
     '      <button class="btn ref" title="Rebuild tree">↻</button>' +
+    '      <button class="btn pop" title="Pop out into its own window">⇱</button>' +
     '      <button class="btn tog" title="Collapse">▾</button>' +
     '    </div>' +
     '    <input class="search" placeholder="filter by name…" />' +
@@ -122,10 +133,23 @@
     '  </div>' +
     '</div>';
 
+  root.innerHTML =
+    '<style>' + CSS + '</style>' + MARKUP +
+    '<button class="pobadge" title="Elm Views is popped out — click to focus its window">' +
+    logo(16, ELM_BLUE) + '<span>Views ↗</span></button>';
+
   var $ = function (s) { return root.querySelector(s); };
   var dt = $('.dt'), panel = $('.panel'), treeEl = $('.tree'),
       ctEl = $('.ct'), bctEl = $('.bct'), searchEl = $('.search'),
       inspBtn = $('.insp'), hd = $('.hd'), badge = $('.badge');
+
+  // The app page owns the DOM, the window.__elm* globals, and the highlight box.
+  // When popped out, only the PANEL's DOM moves to another window — this IIFE
+  // keeps running here, so window.__elm* reads and app-DOM queries use these.
+  var appWin = window, appDoc = document;
+  var popBtn = $('.pop'), pobadge = $('.pobadge');
+  var POP_NAME = '__elm_view_names_popout', POP_LS = '__elmViewsPopped';
+  var popped = false, popWin = null, popTimer = null;
 
   var hlBox = document.createElement('div');
   hlBox.className = 'hl';
@@ -310,7 +334,7 @@
         (x.rate < 0.2 && x.enc > 2 ? '<div class="lzwarn">⚠ recomputes almost every render</div>' : '');
       div.addEventListener('click', function () {
         try {
-          var target = document.querySelector('[' + ATTR + '="' + x.k + '"]');
+          var target = appDoc.querySelector('[' + ATTR + '="' + x.k + '"]');
           if (target) select(target);
         } catch (e) {}
       });
@@ -359,8 +383,8 @@
   }
 
   function build() {
-    if (selected && !document.contains(selected)) { selected = null; hlBox.style.display = 'none'; updateFoot(null); }
-    var els = [].slice.call(document.querySelectorAll('[' + ATTR + ']'));
+    if (selected && !appDoc.contains(selected)) { selected = null; hlBox.style.display = 'none'; updateFoot(null); }
+    var els = [].slice.call(appDoc.querySelectorAll('[' + ATTR + ']'));
     treeEl.innerHTML = '';
     rowByEl = new Map();
     collapsibleKeys = [];
@@ -441,7 +465,7 @@
 
   function deselect() {
     selected = null;
-    root.querySelectorAll('.row.sel').forEach(function (r) { r.classList.remove('sel'); });
+    panel.querySelectorAll('.row.sel').forEach(function (r) { r.classList.remove('sel'); });
     hlBox.style.display = 'none';
     updateFoot(null);
     renderArgs(null);
@@ -449,7 +473,7 @@
 
   function select(el) {
     selected = el;
-    root.querySelectorAll('.row.sel').forEach(function (r) { r.classList.remove('sel'); });
+    panel.querySelectorAll('.row.sel').forEach(function (r) { r.classList.remove('sel'); });
     var row = rowByEl.get(el);
     if (row) { row.classList.add('sel'); row.scrollIntoView({ block: 'nearest' }); }
     lock(el);
@@ -473,13 +497,13 @@
   function setInspect(on) {
     inspecting = on;
     inspBtn.classList.toggle('on', on);
-    if (document.body) document.body.style.cursor = on ? 'crosshair' : '';
+    if (appDoc.body) appDoc.body.style.cursor = on ? 'crosshair' : '';
     if (on) {
-      document.addEventListener('mousemove', onMove, true);
-      document.addEventListener('click', onClick, true);
+      appDoc.addEventListener('mousemove', onMove, true);
+      appDoc.addEventListener('click', onClick, true);
     } else {
-      document.removeEventListener('mousemove', onMove, true);
-      document.removeEventListener('click', onClick, true);
+      appDoc.removeEventListener('mousemove', onMove, true);
+      appDoc.removeEventListener('click', onClick, true);
       clearHover();
     }
   }
@@ -497,11 +521,68 @@
     clampIntoView();
   }
   function clampIntoView() {
+    if (popped) return; // the OS window manages the popped-out panel's geometry
     var r = dt.getBoundingClientRect();
-    var left = Math.min(parseFloat(dt.style.left) || r.left, window.innerWidth - r.width - 8);
-    var top = Math.min(parseFloat(dt.style.top) || r.top, window.innerHeight - r.height - 8);
+    var left = Math.min(parseFloat(dt.style.left) || r.left, appWin.innerWidth - r.width - 8);
+    var top = Math.min(parseFloat(dt.style.top) || r.top, appWin.innerHeight - r.height - 8);
     dt.style.left = Math.max(8, left) + 'px';
     dt.style.top = Math.max(8, top) + 'px';
+  }
+
+  // ---- popout (detached window, like the native Elm debugger) -------------
+  // We physically MOVE the live .dt panel into a separate same-origin window.
+  // adoptNode (via appendChild) preserves its listeners, and this IIFE keeps
+  // running in the app window — so window.__elm* reads and app-DOM queries stay
+  // correct; only the panel's DOM lives elsewhere. The highlight box stays in
+  // the app window, so hovering a row still outlines the real element there.
+  function onKey(e) {
+    if (e.key !== 'Escape') return;
+    if (inspecting) setInspect(false);
+    else if (selected) deselect();
+  }
+
+  function mountInto(w) {
+    popWin = w; popped = true;
+    w.document.head.innerHTML = '<style>' + CSS + '</style>';
+    w.document.body.innerHTML = '';
+    w.document.title = 'Elm Views'; // after head.innerHTML, which would wipe the <title>
+    dt.classList.add('popped');
+    setCollapsed(false);              // a windowed panel is never collapsed
+    w.document.body.appendChild(dt);  // cross-doc append → adopts dt + its listeners
+    w.document.addEventListener('keydown', onKey);
+    popBtn.textContent = '⇤';
+    popBtn.title = 'Pop back into the page';
+    pobadge.style.display = 'inline-flex';
+    try { localStorage.setItem(POP_LS, '1'); } catch (e) {}
+    clearInterval(popTimer);
+    popTimer = setInterval(function () { if (!popWin || popWin.closed) popIn(); }, 500);
+    build();
+    renderLazy();
+  }
+
+  function popOut() {
+    if (popped) { if (popWin && !popWin.closed) popWin.focus(); return; }
+    var w = null;
+    try { w = appWin.open('', POP_NAME, 'width=380,height=680'); } catch (e) {}
+    if (!w) { console.warn('[elm-view] popup blocked — allow popups for this site to detach the overlay'); return; }
+    mountInto(w);
+    try { w.focus(); } catch (e) {}
+  }
+
+  function popIn() {
+    if (!popped) return;
+    popped = false;
+    clearInterval(popTimer); popTimer = null;
+    dt.classList.remove('popped');
+    root.appendChild(dt);             // move the panel back into the in-page shadow root
+    popBtn.textContent = '⇱';
+    popBtn.title = 'Pop out into its own window';
+    pobadge.style.display = 'none';
+    var w = popWin; popWin = null;
+    if (w && !w.closed) { try { w.close(); } catch (e) {} }
+    try { localStorage.removeItem(POP_LS); } catch (e) {}
+    clampIntoView();
+    build();
   }
 
   // ---- wiring ------------------------------------------------------------
@@ -521,11 +602,9 @@
   inspBtn.addEventListener('click', function () { setInspect(!inspecting); });
   openBtn.addEventListener('click', function () { if (selected) openSource(selected); });
   // Escape cancels inspect mode, else clears the current selection
-  document.addEventListener('keydown', function (e) {
-    if (e.key !== 'Escape') return;
-    if (inspecting) setInspect(false);
-    else if (selected) deselect();
-  });
+  appDoc.addEventListener('keydown', onKey);
+  popBtn.addEventListener('click', function () { popped ? popIn() : popOut(); });
+  pobadge.addEventListener('click', function () { if (popWin && !popWin.closed) popWin.focus(); });
   $('.ref').addEventListener('click', build);
   $('.tog').addEventListener('click', function () { setCollapsed(true); });
   $('.coll').addEventListener('click', function () {
@@ -554,6 +633,7 @@
 
   var drag = null;
   function onDown(e) {
+    if (popped) return; // OS window handles moving the detached panel
     if (e.target.closest('.btn') || e.target.closest('.search') || e.target.closest('.tree')) return;
     var r = dt.getBoundingClientRect();
     drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, sx: e.clientX, sy: e.clientY, moved: false };
@@ -561,38 +641,52 @@
   }
   hd.addEventListener('mousedown', onDown);
   badge.addEventListener('mousedown', onDown);
-  window.addEventListener('mousemove', function (e) {
+  appWin.addEventListener('mousemove', function (e) {
     if (!drag) return;
     if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 3) drag.moved = true;
     var w = dt.offsetWidth, h = dt.offsetHeight;
-    dt.style.left = Math.min(Math.max(0, e.clientX - drag.dx), Math.max(0, window.innerWidth - w)) + 'px';
-    dt.style.top = Math.min(Math.max(0, e.clientY - drag.dy), Math.max(0, window.innerHeight - h)) + 'px';
+    dt.style.left = Math.min(Math.max(0, e.clientX - drag.dx), Math.max(0, appWin.innerWidth - w)) + 'px';
+    dt.style.top = Math.min(Math.max(0, e.clientY - drag.dy), Math.max(0, appWin.innerHeight - h)) + 'px';
     if (selected && isOpen()) lock(selected);
   });
-  window.addEventListener('mouseup', function () {
+  appWin.addEventListener('mouseup', function () {
     if (!drag) return;
     var wasClick = !drag.moved;
     drag = null;
     if (wasClick) setCollapsed(!dt.classList.contains('collapsed'));
   });
 
-  window.addEventListener('scroll', function () { if (selected && isOpen()) lock(selected); }, true);
-  window.addEventListener('resize', function () { if (selected && isOpen()) lock(selected); clampIntoView(); });
+  appWin.addEventListener('scroll', function () { if (selected && isOpen()) lock(selected); }, true);
+  appWin.addEventListener('resize', function () { if (selected && isOpen()) lock(selected); clampIntoView(); });
 
   var t = null;
   new MutationObserver(function () {
     clearTimeout(t);
     t = setTimeout(build, 250);
-  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR] });
+  }).observe(appDoc.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: [ATTR] });
 
   build();
   // park the collapsed badge TOP-right (native debugger button is bottom-right)
   requestAnimationFrame(function () {
     var r = dt.getBoundingClientRect();
-    dt.style.left = Math.max(8, window.innerWidth - r.width - 16) + 'px';
+    dt.style.left = Math.max(8, appWin.innerWidth - r.width - 16) + 'px';
     dt.style.top = '16px';
   });
   setTimeout(build, 300);
+
+  // MPA: the app is 6 separately-compiled apps, so navigating fully reloads the
+  // page and re-runs this IIFE. If we were popped out before the navigation,
+  // re-attach to the SAME named window and re-adopt a fresh panel into it, so the
+  // detached DevTools window "follows" you across pages instead of resetting.
+  // window.open('', NAME) returns the existing window with no navigation; if it
+  // was closed it returns null (no user gesture ⇒ blocked), so we fall back inline.
+  try {
+    if (localStorage.getItem(POP_LS) === '1') {
+      var reWin = appWin.open('', POP_NAME);
+      if (reWin && !reWin.closed) mountInto(reWin);
+      else localStorage.removeItem(POP_LS);
+    }
+  } catch (e) {}
 
   // lazy stats accrue continuously; refresh the list while it's open
   renderLazy();

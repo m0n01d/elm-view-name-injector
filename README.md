@@ -69,6 +69,19 @@ The panel mounts in a shadow DOM on `<html>`, so it survives Elm re-renders
 (even `Browser.application`, which owns `<body>`) and its styling can't leak into
 the app.
 
+#### Pop out into its own window
+
+Click **⇱** in the panel header to detach the overlay into a separate browser
+window — like the native Elm debugger's pop-out — so it stops covering the page
+and you can park it on another monitor or desktop. Only the panel's DOM moves;
+the highlight still draws on the real element in the app window. **⇤** pops it
+back in.
+
+In a multi-page app the inline overlay resets on every navigation. The popout
+doesn't: it re-attaches to the same window on the next page load (a `localStorage`
+flag + a named window), so it **follows you across pages**. See
+[docs/popout.md](docs/popout.md) for how it works.
+
 #### Jump-to-source
 
 Select a view and the panel footer shows its `file:line`; click **`<> source`**
