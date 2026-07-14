@@ -51,6 +51,11 @@ function parseArgs(argv) {
         transformOpts.overlay = true;
         transformOpts.capture = true;
         break;
+      case '--lazy':
+        // instrument Html.Lazy hits/misses (implies --overlay)
+        transformOpts.overlay = true;
+        transformOpts.lazy = true;
+        break;
       case '--manifest':
         // build a Module.decl -> file:line manifest from an Elm project dir and
         // embed it for jump-to-source (implies --overlay)

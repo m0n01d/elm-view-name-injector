@@ -61,7 +61,15 @@
     '.btn:hover{background:#26374a}.btn.on{background:' + ACCENT + ';color:#04223a;border-color:' + ACCENT + '}' +
     '.search{margin:8px 10px 4px;padding:5px 8px;background:#0a1118;border:1px solid #2d3c4d;border-radius:5px;color:#d7e0ea;outline:none}' +
     '.search:focus{border-color:' + ACCENT + '}' +
-    '.tree{overflow:auto;padding:4px 0 8px;flex:1 1 0;min-height:64px}' +
+    // collapsible sections
+    '.sec{display:flex;flex-direction:column;min-height:0;flex:1 1 0}' +
+    '.sec.col{flex:0 0 auto}.sec.hide{display:none}' +
+    '.sechd{display:flex;align-items:center;gap:6px;padding:6px 10px;background:#111c27;border-top:1px solid #263241;cursor:pointer;user-select:none;font-weight:700}' +
+    '.sechd .cv{width:9px;flex:none;font-size:10px;opacity:.7;display:inline-block}.sec.col .sechd .cv{transform:rotate(-90deg)}' +
+    '.sechd .ct,.sechd .lzct{opacity:.5;font-weight:400}' +
+    '.sechd .btn{margin-left:auto}.sechd .nw{margin-left:auto;font-size:10px;color:#04223a;background:' + ACCENT + ';padding:1px 6px;border-radius:3px;font-weight:600}' +
+    '.secbody{overflow:auto;min-height:0;flex:1 1 0}' +
+    '.tree{padding:4px 0 8px}' +
     '.row{display:flex;align-items:center;gap:4px;padding:2px 10px 2px 0;cursor:pointer;white-space:nowrap}' +
     '.row:hover{background:#1a2632}.row.sel{background:#3a2f1a}' +
     '.tw{display:inline-block;width:12px;flex:none;text-align:center;opacity:.65;font-size:10px}' +
@@ -70,33 +78,46 @@
     '.row.sel .fn{color:' + LOCK + '}' +
     '.cnt{opacity:.35;font-size:11px;margin-left:5px}' +
     '.empty{padding:16px 12px;opacity:.6;line-height:1.5}' +
-    '.foot{display:none;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid #263241;background:#0c141d}' +
-    '.foot.on{display:flex}' +
-    '.foot .loc{flex:1;opacity:.7;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}' +
-    '.foot .ide{background:#1c2836;color:#d7e0ea;border:1px solid #2d3c4d;border-radius:5px;padding:2px 4px;font-size:11px;max-width:120px}' +
-    '.args{display:none;border-top:1px solid #263241;background:#0c141d;overflow:auto;padding:6px 10px;flex:1 1 0;min-height:0}' +
-    '.args.on{display:block}' +
-    '.args .ahd{display:flex;align-items:center;gap:6px;font-weight:700;margin-bottom:4px}' +
-    '.args .ahd .nw{margin-left:auto;font-size:10px;color:#04223a;background:' + ACCENT + ';padding:1px 6px;border-radius:3px}' +
+    // args
+    '.args{padding:6px 10px}' +
     '.args .asig{opacity:.6;margin-bottom:6px;line-height:1.4;word-break:break-word}' +
     '.args .albl{margin:6px 0 2px}.args .an{color:' + ACCENT + '}.args .aty{opacity:.5}' +
     '.args pre{margin:0;padding:6px 8px;background:#0a1118;border:1px solid #223;border-radius:5px;white-space:pre-wrap;word-break:break-word;line-height:1.5;color:#c8d3de;font-size:11px}' +
     '.args .ahint{opacity:.55;font-size:11px}' +
+    // lazy
+    '.lazy .lz{padding:5px 10px;border-bottom:1px solid #16212d;cursor:pointer}.lazy .lz:hover{background:#1a2632}' +
+    '.lz .lztop{display:flex;align-items:baseline;gap:6px}.lz .lzr{margin-left:auto;font-weight:700}' +
+    '.lz .lzbar{height:5px;background:#1c2836;border-radius:3px;overflow:hidden;margin-top:3px}.lz .lzfill{height:100%}' +
+    '.lz .lznums{opacity:.6;font-size:11px;margin-top:2px}.lz .lzwarn{color:#e2504a;font-size:11px;margin-top:2px}' +
+    // footer
+    '.foot{display:none;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid #263241;background:#0c141d}' +
+    '.foot.on{display:flex}' +
+    '.foot .loc{flex:1;opacity:.7;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}' +
+    '.foot .ide{background:#1c2836;color:#d7e0ea;border:1px solid #2d3c4d;border-radius:5px;padding:2px 4px;font-size:11px;max-width:120px}' +
     '.foot .open[disabled]{opacity:.4;cursor:default}' +
     '</style>' +
     '<div class="dt collapsed">' +
     '  <button class="badge" title="Elm Views — click to open">' + logo(24, ELM_BLUE) + '<span class="bct">0</span></button>' +
     '  <div class="panel">' +
     '    <div class="hd">' + logo(15, HD_BG) +
-    '      <span class="ttl">Elm Views</span><span class="ct"></span>' +
+    '      <span class="ttl">Elm Views</span>' +
     '      <button class="btn insp" title="Inspect: click an element on the page">🎯</button>' +
-    '      <button class="btn coll" title="Collapse / expand all">⊟</button>' +
     '      <button class="btn ref" title="Rebuild tree">↻</button>' +
     '      <button class="btn tog" title="Collapse">▾</button>' +
     '    </div>' +
     '    <input class="search" placeholder="filter by name…" />' +
-    '    <div class="tree"></div>' +
-    '    <div class="args"></div>' +
+    '    <div class="sec tsec">' +
+    '      <div class="sechd" data-sec="tsec"><span class="cv">▾</span><span>Views</span><span class="ct"></span><button class="btn coll" title="Collapse / expand all nodes">⊟</button></div>' +
+    '      <div class="secbody tree"></div>' +
+    '    </div>' +
+    '    <div class="sec asec hide">' +
+    '      <div class="sechd" data-sec="asec"><span class="cv">▾</span><span>Args</span><span class="nw">live</span></div>' +
+    '      <div class="secbody args"></div>' +
+    '    </div>' +
+    '    <div class="sec lsec hide col">' +
+    '      <div class="sechd" data-sec="lsec"><span class="cv">▾</span><span>Lazy</span><span class="lzct"></span><button class="btn lzreset" title="Reset counts">reset</button></div>' +
+    '      <div class="secbody lazy"></div>' +
+    '    </div>' +
     '    <div class="foot"><span class="loc"></span><select class="ide" title="Open in…"></select><button class="btn open" title="Open in editor (or double-click a row)">&lt;&gt; source</button></div>' +
     '  </div>' +
     '</div>';
@@ -113,6 +134,7 @@
   root.appendChild(hlBox);
 
   var footEl = $('.foot'), locEl = $('.loc'), openBtn = $('.open'), ideEl = $('.ide'), argsEl = $('.args');
+  var argsSecEl = $('.asec'), lazySecEl = $('.lsec'), lazyEl = $('.lazy'), lzctEl = $('.lzct');
   var selected = null, inspecting = false, rowByEl = new Map();
   var collapsed = new Set(), collapsibleKeys = [];
 
@@ -212,16 +234,12 @@
 
   function renderArgs(el) {
     argsEl.innerHTML = '';
-    argsEl.classList.remove('on');
+    argsSecEl.classList.add('hide');
     if (!el) return;
     var name = el.getAttribute(ATTR);
     var reg = window.__elmViewArgs;
     if (!reg) return; // capture not enabled in this build → no Args section
-    argsEl.classList.add('on');
-    var hd = document.createElement('div');
-    hd.className = 'ahd';
-    hd.innerHTML = '<span>Args</span><span class="nw">live</span>';
-    argsEl.appendChild(hd);
+    argsSecEl.classList.remove('hide');
 
     // type signature (what the view expects) from the manifest
     var entry = manifest && manifest[name];
@@ -259,6 +277,44 @@
       if (s.length > 2000) s = s.slice(0, 2000) + ' …';
       pre.textContent = s;
       argsEl.appendChild(pre);
+    });
+  }
+
+  // ---- lazy hit/miss ------------------------------------------------------
+  function lazyColor(rate) {
+    return rate < 0.2 ? '#e2504a' : rate < 0.8 ? '#ffb454' : '#5dcaa5';
+  }
+  function renderLazy() {
+    var reg = window.__elmLazyStats;
+    if (!reg) { lazySecEl.classList.add('hide'); return; }
+    lazySecEl.classList.remove('hide');
+    var keys = Object.keys(reg);
+    lzctEl.textContent = keys.length + (keys.length === 1 ? ' site' : ' sites');
+    var rows = keys.map(function (k) {
+      var r = reg[k], hits = r.enc - r.miss, rate = r.enc ? hits / r.enc : 0;
+      return { k: k, hits: hits, miss: r.miss, enc: r.enc, rate: rate };
+    });
+    rows.sort(function (a, b) { return a.rate - b.rate; }); // worst first
+    lazyEl.innerHTML = '';
+    rows.forEach(function (x) {
+      var dot = x.k.lastIndexOf('.'), color = lazyColor(x.rate), pct = Math.round(x.rate * 100);
+      var div = document.createElement('div');
+      div.className = 'lz';
+      div.innerHTML =
+        '<div class="lztop"><span class="name"><span class="mod">' +
+        (dot > -1 ? x.k.slice(0, dot + 1) : '') + '</span><span class="fn">' +
+        (dot > -1 ? x.k.slice(dot + 1) : x.k) + '</span></span>' +
+        '<span class="lzr" style="color:' + color + '">' + pct + '%</span></div>' +
+        '<div class="lzbar"><div class="lzfill" style="width:' + pct + '%;background:' + color + '"></div></div>' +
+        '<div class="lznums">' + x.hits + ' hit / ' + x.miss + ' miss</div>' +
+        (x.rate < 0.2 && x.enc > 2 ? '<div class="lzwarn">⚠ recomputes almost every render</div>' : '');
+      div.addEventListener('click', function () {
+        try {
+          var target = document.querySelector('[' + ATTR + '="' + x.k + '"]');
+          if (target) select(target);
+        } catch (e) {}
+      });
+      lazyEl.appendChild(div);
     });
   }
 
@@ -479,6 +535,23 @@
   });
   searchEl.addEventListener('input', build);
 
+  // collapse/expand a section by clicking its header (ignore header buttons)
+  panel.addEventListener('click', function (e) {
+    var sh = e.target.closest && e.target.closest('.sechd');
+    if (!sh || e.target.closest('.btn')) return;
+    var sec = sh.parentElement;
+    sec.classList.toggle('col');
+    if (sh.getAttribute('data-sec') === 'lsec' && !sec.classList.contains('col')) renderLazy();
+  });
+
+  // lazy: reset counts in place (thunk m() closures keep pointing at live recs)
+  $('.lzreset').addEventListener('click', function (e) {
+    e.stopPropagation();
+    var reg = window.__elmLazyStats || {};
+    Object.keys(reg).forEach(function (k) { reg[k].enc = 0; reg[k].miss = 0; });
+    renderLazy();
+  });
+
   var drag = null;
   function onDown(e) {
     if (e.target.closest('.btn') || e.target.closest('.search') || e.target.closest('.tree')) return;
@@ -520,4 +593,10 @@
     dt.style.top = '16px';
   });
   setTimeout(build, 300);
+
+  // lazy stats accrue continuously; refresh the list while it's open
+  renderLazy();
+  setInterval(function () {
+    if (window.__elmLazyStats && !lazySecEl.classList.contains('hide') && !lazySecEl.classList.contains('col')) renderLazy();
+  }, 700);
 })();

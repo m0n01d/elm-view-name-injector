@@ -5695,6 +5695,29 @@ var $elm$html$Html$Lazy$lazy = $elm$virtual_dom$VirtualDom$lazy;
 var $author$project$Main$viewLazy = function (model) {
 	return A2($elm$html$Html$Lazy$lazy, $author$project$Main$viewA1, model);
 };
+var $author$project$Main$viewLazyBroken = function (model) {
+	return A2(
+		$elm$html$Html$Lazy$lazy,
+		function (_v0) {
+			return $author$project$Main$viewA1(model);
+		},
+		_Utils_Tuple0);
+};
+var $author$project$Main$stableChild = function (s) {
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				$elm$html$Html$Attributes$class('stable')
+			]),
+		_List_fromArray(
+			[
+				$elm$html$Html$text('stable: ' + s)
+			]));
+};
+var $author$project$Main$viewLazyStable = function (model) {
+	return A2($elm$html$Html$Lazy$lazy, $author$project$Main$stableChild, model.name);
+};
 var $elm$html$Html$Events$onMouseOver = function (msg) {
 	return A2(
 		$elm$html$Html$Events$on,
@@ -5799,6 +5822,8 @@ var $author$project$Main$view = function (model) {
 				$author$project$Main$viewPipeText(model),
 				$author$project$Main$viewMap(model),
 				$author$project$Main$viewLazy(model),
+				$author$project$Main$viewLazyStable(model),
+				$author$project$Main$viewLazyBroken(model),
 				$author$project$Main$viewKeyed(model),
 				$author$project$Main$viewCustomNode,
 				$author$project$Main$customTag(

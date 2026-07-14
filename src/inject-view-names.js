@@ -38,7 +38,18 @@ const DEFAULTS = {
   wrap: false,
   overlay: false, // append the in-page DevTools overlay runtime (experimental)
   capture: false, // record view fn call-args for inspection (experimental; needs _Debug_toString)
+  lazy: false, // instrument Html.Lazy.lazy* to count hits/misses (experimental)
 };
+
+// A2($elm$html$Html$Lazy$lazy, …) / lazy2 … lazy8 (and the VirtualDom aliases)
+const LAZY_RE = /^\$elm\$(?:html\$Html\$Lazy|virtual_dom\$VirtualDom)\$lazy([2-8])?$/;
+
+// The kernel lazy makers. Every Html.Lazy / VirtualDom lazy alias is assigned
+// from these, and the kernel is emitted before any package alias or app code —
+// so wrapping the kernel in place makes every downstream binding (including
+// init-time point-free partials) inherit the counting wrapper. lazy = fn + 1 ref
+// = arity 2 … lazy8 = fn + 8 refs = arity 9.
+const KERNEL_LAZY_RE = /^_VirtualDom_lazy([2-8])?$/;
 
 let _overlaySrc = null;
 function overlaySource() {
@@ -225,17 +236,68 @@ function captureRuntime() {
   );
 }
 
+// Runtime for Html.Lazy instrumentation.
+//
+// Real-world Elm applies lazy point-free (`Lazy.lazy renderRow` mapped over a
+// list) or partially (`A2(lazy4, fn, x)`), which compile to a direct/partial
+// call on the lazy identifier — NOT the fully-applied `A2(lazy, fn, arg)` form.
+// So instead of rewriting call sites, we wrap the kernel `_VirtualDom_lazy*`
+// makers in place (see the edits generated in transform). Every application
+// shape — full, partial, point-free, init-time — flows through the wrapper.
+//
+// This block defines the wrapper factory. __mkLazy(orig, n) returns an F-object
+// of arity n that delegates to the original lazy (memo refs untouched), counts
+// each encounter, and overrides the created thunk's `m` (forced only on a miss)
+// to count misses. Attribution: the transform tags each memo fn at its call site
+// with `__ln("Module.fn", fn)` (sets fn.__elmName); the wrapper reads it for the
+// key. __mkLazy/__ln are function declarations (hoisted), so the kernel wraps can
+// call them even though this block is emitted later, at the first app decl.
+function lazyRuntime() {
+  return (
+    '\nvar __elmLazyStats=(typeof window!=="undefined")?(window.__elmLazyStats=window.__elmLazyStats||{}):{};' +
+    'function __ln(name,fn){if(fn!=null&&fn.__elmName===undefined){try{fn.__elmName=name}catch(e){}}return fn}' +
+    'if(typeof window!=="undefined")window.__ln=__ln;' +
+    'function __mkLazy(orig,n){if(orig==null)return orig;' +
+    'var mk=n===2?F2:n===3?F3:n===4?F4:n===5?F5:n===6?F6:n===7?F7:n===8?F8:F9;' +
+    'var ap=n===2?A2:n===3?A3:n===4?A4:n===5?A5:n===6?A6:n===7?A7:n===8?A8:A9;' +
+    'return mk(function(){var args=[].slice.call(arguments);' +
+    'var node=ap.apply(null,[orig].concat(args));' +
+    'var fn=args[0],key=(fn&&fn.__elmName)||"(anonymous lazy)";' +
+    'var rec=(__elmLazyStats[key]=__elmLazyStats[key]||{enc:0,miss:0});rec.enc++;' +
+    'if(node&&node.$===5&&typeof node.m==="function"){var m=node.m;node.m=function(){rec.miss++;return m.apply(this,arguments)}}' +
+    'return node})}\n'
+  );
+}
+
 function transform(code, options = {}) {
   const opts = { ...DEFAULTS, ...options };
   const stats = { spliced: 0, wrapped: 0, skipped: 0, tagged: [] };
   const edits = []; // { start, end, text }
+  let sawLazy = false; // any Html.Lazy application present (drives runtime injection)
+  const kernelWraps = []; // { pos, name, arity } — kernel _VirtualDom_lazy* to wrap in place
 
   const ast = babelParser.parse(code, { sourceType: 'script' });
 
   traverse(ast, {
     VariableDeclarator(path) {
       const id = path.node.id;
-      if (!t.isIdentifier(id) || !id.name.startsWith(opts.prefix)) return;
+      if (!t.isIdentifier(id)) return;
+
+      // Kernel lazy makers (names don't start with the app prefix): record them
+      // so we can wrap each in place, right after its definition — before any
+      // package alias or app consumer runs.
+      if (opts.lazy && path.node.init) {
+        const km = KERNEL_LAZY_RE.exec(id.name);
+        if (km) {
+          const arity = km[1] ? Number(km[1]) + 1 : 2;
+          const stmt = path.parentPath ? path.parentPath.node : null;
+          const pos = stmt && t.isVariableDeclaration(stmt) ? stmt.end : path.node.end;
+          kernelWraps.push({ pos, name: id.name, arity });
+          sawLazy = true;
+        }
+      }
+
+      if (!id.name.startsWith(opts.prefix)) return;
       if (!path.node.init) return;
       const qname = demangle(id.name, opts.prefix);
       if (!qname) return;
@@ -283,13 +345,68 @@ function transform(code, options = {}) {
         stats.captured = (stats.captured || 0) + 1;
       }
     },
+
+    // Html.Lazy instrumentation: tag the memoized fn at every application so the
+    // runtime wrapper (see lazyRuntime) can attribute hits/misses to it. We wrap
+    // ONLY the memo-fn argument with __ln("key", fn) — arity/behavior unchanged,
+    // so this is safe for partial and point-free applications alike. The actual
+    // counting happens in the global lazy wrapper, not here.
+    CallExpression(path) {
+      if (!opts.lazy) return;
+      const n = path.node;
+      let memo;
+      if (t.isIdentifier(n.callee) && LAZY_RE.test(n.callee.name)) {
+        // direct/partial call: lazyId(memo, …)
+        memo = n.arguments[0];
+      } else if (
+        t.isIdentifier(n.callee) &&
+        /^A[2-9]$/.test(n.callee.name) &&
+        n.arguments[0] &&
+        t.isIdentifier(n.arguments[0]) &&
+        LAZY_RE.test(n.arguments[0].name)
+      ) {
+        // A-call: A_(lazyId, memo, …)
+        memo = n.arguments[1];
+      } else return;
+      if (!memo) return;
+      sawLazy = true;
+      // idempotency: don't re-wrap an already-tagged memo
+      if (t.isCallExpression(memo) && t.isIdentifier(memo.callee) && memo.callee.name === '__ln') return;
+      // key: the memo fn if it's a named app decl, else the enclosing declaration
+      let key;
+      if (t.isIdentifier(memo) && memo.name.startsWith(opts.prefix)) {
+        key = demangle(memo.name, opts.prefix);
+      } else {
+        const dp = path.findParent(
+          (p) => p.isVariableDeclarator() && t.isIdentifier(p.node.id) && p.node.id.name.startsWith(opts.prefix)
+        );
+        key = dp ? demangle(dp.node.id.name, opts.prefix) + '/lazy' : null;
+      }
+      if (!key) return; // library lazy with no app context — runtime still counts it under a fallback key
+      edits.push({ start: memo.start, end: memo.start, text: `__ln(${jsStr(key)}, ` });
+      edits.push({ start: memo.end, end: memo.end, text: ')' });
+      stats.lazy = (stats.lazy || 0) + 1;
+    },
   });
 
-  // inject the capture runtime once, before the first app declaration (where
-  // _Debug_toString is already in scope)
-  if (opts.capture && stats.spliced + stats.wrapped > 0) {
+  // inject runtime(s) once, before the first app declaration (kernel helpers +
+  // _Debug_toString are in scope there; __mkLazy/__ln are function-hoisted so the
+  // kernel wraps below can call them despite running earlier in the file)
+  let runtime = '';
+  if (opts.capture && stats.spliced + stats.wrapped > 0) runtime += captureRuntime();
+  if (opts.lazy && sawLazy) runtime += lazyRuntime();
+  if (runtime) {
     const at = code.indexOf('var ' + opts.prefix);
-    if (at !== -1) edits.push({ start: at, end: at, text: captureRuntime() });
+    if (at !== -1) edits.push({ start: at, end: at, text: runtime });
+  }
+
+  // wrap each kernel lazy maker in place, right after its definition — so every
+  // downstream alias/consumer (including init-time point-free partials) inherits
+  // the counting wrapper regardless of Elm's dependency-ordered emission
+  if (opts.lazy && sawLazy) {
+    for (const kw of kernelWraps) {
+      edits.push({ start: kw.pos, end: kw.pos, text: `;${kw.name}=__mkLazy(${kw.name},${kw.arity});` });
+    }
   }
 
   // Apply edits back-to-front so earlier offsets stay valid. Edits target
