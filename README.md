@@ -15,6 +15,11 @@ Point at any element in the browser and know which Elm function rendered it.
 No source changes, **no wrapper nodes**, no runtime library — it edits the
 compiled JS.
 
+> **Coding agent?** The attributes + `window.__elmView*` globals are a
+> machine-readable bridge from rendered DOM to Elm source (`file:line`). See
+> [docs/for-agents.md](docs/for-agents.md) for the signals and a browser-driving
+> cookbook.
+
 ![The in-page overlay: a live component tree, the selected view highlighted in the page, and a footer with file:line + an "Open in…" editor picker for jump-to-source](docs/overlay.png)
 
 > Status: proof-of-concept. Works against Elm 0.19.1 output in standard **and
