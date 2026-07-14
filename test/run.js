@@ -175,20 +175,37 @@ check('capture output still valid JS', () =>
   babelParser.parse(cap.code, { sourceType: 'script' })
 );
 
-console.log('\n--lazy mode (hit/miss instrumentation)');
+console.log('\n--lazy mode (hit/miss instrumentation, global wrap + memo naming)');
 const lz = transform(fixture, { overlay: true, lazy: true });
-check('injects the lazy runtime (__lz + __lzReal)', () =>
-  assert.ok(/function __lz\(key,n\)/.test(lz.code) && /__lzReal/.test(lz.code), 'runtime missing')
+check('injects the lazy runtime (__mkLazy + __ln)', () =>
+  assert.ok(/function __mkLazy\(orig,n\)/.test(lz.code) && /function __ln\(name,fn\)/.test(lz.code), 'runtime missing')
 );
-check('keys a lazy by its memoized fn (lazy viewA1 → Main.viewA1)', () =>
-  assert.ok(lz.code.includes('__lz("Main.viewA1"'), 'memo-fn key missing')
+check('wraps the kernel lazy makers in place (inherited by every alias)', () =>
+  assert.ok(
+    lz.code.includes('_VirtualDom_lazy=__mkLazy(_VirtualDom_lazy,2)') &&
+      lz.code.includes('_VirtualDom_lazy2=__mkLazy(_VirtualDom_lazy2,3)'),
+    'kernel lazy wrap missing'
+  )
 );
-check('keys an inline-lambda lazy by the enclosing decl', () =>
-  assert.ok(lz.code.includes('__lz("Main.viewLazyBroken/lazy"'), 'fallback key missing')
+check('kernel wrap runs after the kernel def (var is assigned before it is wrapped)', () => {
+  const defAt = lz.code.search(/var _VirtualDom_lazy\s*=/);
+  const wrapAt = lz.code.indexOf('_VirtualDom_lazy=__mkLazy(_VirtualDom_lazy,2)');
+  assert.ok(defAt !== -1 && wrapAt !== -1 && defAt < wrapAt, `def@${defAt} wrap@${wrapAt}`);
+});
+check('names a memo fn by identity (lazy viewA1 → Main.viewA1)', () =>
+  assert.ok(lz.code.includes('__ln("Main.viewA1"'), 'memo-fn name missing')
 );
-check('does NOT rewrite a partially-applied lazy2 (arity mismatch)', () =>
-  assert.ok(lz.code.includes('$elm$html$Html$Lazy$lazy2'), 'partial lazy2 was rewritten')
+check('names an inline-lambda lazy by the enclosing decl', () =>
+  assert.ok(lz.code.includes('__ln("Main.viewLazyBroken/lazy"'), 'fallback name missing')
 );
+check('leaves the lazy call structure intact (arity preserved, no partial breakage)', () =>
+  // the lazy identifier is still the callee/arg — we only wrapped the memo fn
+  assert.ok(lz.code.includes('$elm$html$Html$Lazy$lazy2'), 'lazy2 call structure was altered')
+);
+check('does not double-wrap on a second pass (idempotent __ln)', () => {
+  const again = transform(lz.code, { overlay: true, lazy: true });
+  assert.ok(!again.code.includes('__ln("Main.viewA1", __ln('), 'memo fn was wrapped twice');
+});
 check('lazy output still valid JS', () => babelParser.parse(lz.code, { sourceType: 'script' }));
 
 console.log('');
